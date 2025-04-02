@@ -8,13 +8,25 @@ struct DigitizedSignal{T}
 end
 
 function amplitude(signal::DigitizedSignal, t)
-    @show i = Int64(floor(t / signal.δt)) + 1
     
+    @show i = Int64(floor(t / signal.δt)) + 1
+
     if t > length(signal.samples)*signal.δt
         throw(DimensionMismatch)
     end
-    return (signal.samples[i] + signal.samples[i+1]) / 2
+    t_i = (i - 1) * signal.δt
+    t == t_i && return signal.samples[i]
+    
+    # Calculate interpolation parameters
+    α = (t - t_i) / signal.δt  # 0 ≤ α ≤ 1
+    y0 = signal.samples[i]
+    y1 = signal.samples[i+1]
+    
+    # Linear interpolation formula 
+    return y0 + α * (y1 - y0)
+    
 end
+
 
 export DigitizedSignal
 export amplitude

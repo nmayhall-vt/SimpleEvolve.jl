@@ -36,8 +36,13 @@ function test1()
     signal = DigitizedSignal(amps, δt, .2)
 
     # display(amps)
-    scatter([i*δt for i in 0:n_samples], amps, marker=:circle) 
-    plot!([i*δt for i in 0:n_samples], [amplitude(signal, i*δt) for i in 0:n_samples], marker=:circle) 
+    scatter([i*δt for i in 0:n_samples], amps, marker=:circle,markersize=10) 
+
+    # trying to access in between values for the amplitude 
+    # that we need for adapted time steps in ODE
+    n_new_samples =n_samples*10
+    δt_new = T/n_new_samples
+    plot!([i*δt_new for i in 0:n_new_samples], [amplitude(signal, i*δt_new) for i in 0:n_new_samples], marker=:circle) 
     savefig("amps.pdf")
 
 
