@@ -1,34 +1,27 @@
 module SimpleEvolve
 
 
-struct DigitizedSignal{T}
-    samples::Vector{T}
-    δt::Float64
-    carrier_freq::Float64
-end
-
-function amplitude(signal::DigitizedSignal, t)
-    
-    @show i = Int64(floor(t / signal.δt)) + 1
-
-    if t > length(signal.samples)*signal.δt
-        throw(DimensionMismatch)
-    end
-    t_i = (i - 1) * signal.δt
-    t == t_i && return signal.samples[i]
-    
-    # Calculate interpolation parameters
-    α = (t - t_i) / signal.δt  # 0 ≤ α ≤ 1
-    y0 = signal.samples[i]
-    y1 = signal.samples[i+1]
-    
-    # Linear interpolation formula 
-    return y0 + α * (y1 - y0)
-    
-end
+include("signal.jl")
+include("evolution.jl")
+include("gradient.jl")
+include("helpers.jl")
+include("costfunction.jl")
 
 
 export DigitizedSignal
 export amplitude
+export frequency
+export infidelity
+export evolve_direct_exponentiation
+export evolve_trotter
+export evolve_ODE
+export a_fullspace
+export a_q
+export costfunction_ode
+export costfunction_direct_exponentiation
+export costfunction_trotter
+export gradientsignal_ODE
+export gradientsignal_direct_exponentiation
+export gradientsignal_trotter
 
 end

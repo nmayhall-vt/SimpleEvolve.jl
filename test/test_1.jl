@@ -2,7 +2,7 @@ using SimpleEvolve
 using Plots
 using Random
 using LinearAlgebra
-
+using DifferentialEquations
 function test1()
 
     #
@@ -13,7 +13,7 @@ function test1()
 
     n_sites = 2
     n_levels = 2
-    T = 10
+    T = 20
 
     dim = n_levels^n_sites
     Hstatic = rand(Float64, dim, dim) 
@@ -29,8 +29,15 @@ function test1()
         Ak = rand(Float64, dim, dim) 
         push!(drives, Ak)
     end
+    
 
-    n_samples = 10
+    drives_fullspace = a_fullspace(n_sites,n_levels,eigvecs)
+    display(drives_fullspace[1])
+    display(drives_fullspace[2])
+    
+    drive_q_dbasis=a_q(n_levels)
+    display(drive_q_dbasis)
+    n_samples = 1000
     δt = T/n_samples
     amps = [sin(2*π*(t/n_samples)) for t in 0:n_samples+1]
     signal = DigitizedSignal(amps, δt, .2)
@@ -46,9 +53,22 @@ function test1()
     savefig("amps.pdf")
 
 
-    function dψdt(ψ, t)
-    end
+    initial_state = "1"^(n_sites÷2) * "0"^(n_sites÷2)
+    ψ_initial = zeros(ComplexF64, dim)                              
+    ψ_initial[1 + parse(Int, initial_state, base=n_levels)] = one(ComplexF64) 
 
+    
+    @time energy,ϕ = costfunction_ode(ψ_initial, Hstatic, signal, n_sites, drives_fullspace, T)   
+    println("ode evolved energy is ",energy)
+    
+    @time energy2,ψ_d = costfunction_direct_exponentiation(ψ_initial, Hstatic, signal, n_sites, drives_fullspace, T, δt, n_samples)
+    println("direct evolved energy is ",energy2)
+
+    
+    @time energy3,ψ_trot = costfunction_trotter(ψ_initial, Hstatic, signal, n_sites, n_levels, drive_q_dbasis, T, δt, n_samples)
+    println("trotter evolved energy is ",energy3)
+    display(infidelity(ϕ,ψ_d))
+    display(infidelity(ϕ,ψ_trot))
 end
 
 test1()
