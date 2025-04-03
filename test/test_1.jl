@@ -21,7 +21,7 @@ function test1()
     C = rand(Float64, dim, dim) 
     C += C'
 
-    println(" Eignvalues of our static Hamiltonian")
+    println("Eignvalues of our static Hamiltonian")
     display(eigvals(Hstatic))
 
     drives = Vector{Matrix{Float64}}([])
@@ -31,12 +31,12 @@ function test1()
     end
     
 
-    drives_fullspace = a_fullspace(n_sites,n_levels,eigvecs)
-    display(drives_fullspace[1])
-    display(drives_fullspace[2])
+    # drives_fullspace = a_fullspace(n_sites,n_levels,eigvecs)
+    # display(drives_fullspace[1])
+    # display(drives_fullspace[2])
     
-    drive_q_dbasis=a_q(n_levels)
-    display(drive_q_dbasis)
+    # drive_q_dbasis=a_q(n_levels)
+    # display(drive_q_dbasis)
     n_samples = 1000
     δt = T/n_samples
     amps = [sin(2*π*(t/n_samples)) for t in 0:n_samples+1]
@@ -58,17 +58,14 @@ function test1()
     ψ_initial[1 + parse(Int, initial_state, base=n_levels)] = one(ComplexF64) 
 
     
-    @time energy,ϕ = costfunction_ode(ψ_initial, Hstatic, signal, n_sites, drives_fullspace, T)   
+    @time energy,ϕ = costfunction_ode(ψ_initial, Hstatic, signal, n_sites, drives, T,C)   
     println("ode evolved energy is ",energy)
     
-    @time energy2,ψ_d = costfunction_direct_exponentiation(ψ_initial, Hstatic, signal, n_sites, drives_fullspace, T, δt, n_samples)
+    @time energy2,ψ_d = costfunction_direct_exponentiation(ψ_initial, Hstatic, signal, n_sites, drives, T, δt, n_samples,C)
     println("direct evolved energy is ",energy2)
 
     
-    @time energy3,ψ_trot = costfunction_trotter(ψ_initial, Hstatic, signal, n_sites, n_levels, drive_q_dbasis, T, δt, n_samples)
-    println("trotter evolved energy is ",energy3)
     display(infidelity(ϕ,ψ_d))
-    display(infidelity(ϕ,ψ_trot))
 end
 
 test1()
