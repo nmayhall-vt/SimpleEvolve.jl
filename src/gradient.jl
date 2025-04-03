@@ -14,7 +14,7 @@ function gradientsignal_ODE(ψ0,
     σ = copy(ψ0)
     t_ = range(0,T,length=n_samples+1)
     δt = T/n_samples
-    
+
     #evolve the sigma state with ODE in forward direction
     parameters = [signal, n_sites, drives, eigvals]
     prob = ODEProblem(dψdt!, σ, (0.0,T), parameters)
@@ -31,11 +31,17 @@ function gradientsignal_ODE(ψ0,
     #calculating gradient by evolving both \psi and \sigma states
     for i ∈ (1:n_samples+1)
         if i==1
-            t_i=0.0,t_f=δt/2,Δt=δt/2
+            t_i=0.0
+            t_f=δt/2
+            Δt=δt/2
         elseif i==n_samples+1
-            t_i=T-δt/2,t_f=T,Δt=δt/2
+            t_i=T-δt/2
+            t_f=T
+            Δt=δt/2
         else
-            t_i=t_[i]-δt/2,t_f=t_[i]+δt/2,Δt=δt
+            t_i=t_[i]-δt/2
+            t_f=t_[i]+δt/2
+            Δt=δt
         end
         
         dΩ= gradient_timestep()

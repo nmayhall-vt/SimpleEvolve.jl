@@ -11,7 +11,7 @@ function test1()
 
     Random.seed!(2)
 
-    n_sites = 2
+    n_sites = 4
     n_levels = 2
     T = 20
 
@@ -37,7 +37,7 @@ function test1()
     
     # drive_q_dbasis=a_q(n_levels)
     # display(drive_q_dbasis)
-    n_samples = 1000
+    n_samples = 10000
     δt = T/n_samples
     amps = [sin(2*π*(t/n_samples)) for t in 0:n_samples+1]
     signal = DigitizedSignal(amps, δt, .2)
