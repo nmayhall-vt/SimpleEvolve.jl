@@ -3,11 +3,14 @@ using SimpleEvolve
 
 function gradientsignal_ODE(ψ0,
                             T,
-                            signal,
+                            signals,
                             n_sites,
                             drives,
                             Hstatic,
-                            cost_ham)
+                            cost_ham,
+                            n_samples,
+                            ∂Ω = Matrix{Float64}(undef, n_samples+1, n_sites))
+
     eigvals, eigvecs = eigen(Hstatic)
     tmp_σ = zeros(ComplexF64, length(ψ0))
     ψ = copy(ψ0)
@@ -16,15 +19,15 @@ function gradientsignal_ODE(ψ0,
     δt = T/n_samples
 
     #evolve the sigma state with ODE in forward direction
-    parameters = [signal, n_sites, drives, eigvals]
+    parameters = [signals, n_sites, drives, eigvals]
     prob = ODEProblem(dψdt!, σ, (0.0,T), parameters)
-    sol = solve(prob, BS3(), abstol=1e-10, reltol=1e-11,save_everystep=false)
+    sol = solve(prob, BS3(), abstol=1e-8, reltol=1e-8,save_everystep=false)
     σ .= sol.u[end]
     σ .= mul!(tmp_σ,cost_ham,σ)                     # calculate C|ψ⟩    
     
     # reverse time evolution of the sigma state
     prob_ = ODEProblem(dψdt!, σ, (T,0.0), parameters)
-    sol_ = solve(prob_, BS3(), abstol=1e-10, reltol=1e-11,save_everystep=false)
+    sol_ = solve(prob_, BS3(), abstol=1e-8, reltol=1e-8,save_everystep=false)
     σ .= sol_.u[end]
 
     
@@ -44,25 +47,109 @@ function gradientsignal_ODE(ψ0,
             Δt=δt
         end
         
-        dΩ= gradient_timestep()
-        parameters = [signal, n_sites, drives, eigvals]
-        prob_ψ = ODEProblem(dψdt!, σ, (t_i, t_f), parameters)
-        sol_ψ = solve(prob_ψ, BS3(), abstol=1e-10, reltol=1e-11,save_everystep=false)
+        gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvals,t_i,i,Δt)
+        parameters = [signals, n_sites, drives, eigvals]
+        prob_ψ = ODEProblem(dψdt!, ψ, (t_i, t_f), parameters)
+        sol_ψ = solve(prob_ψ, BS3(), abstol=1e-9, reltol=1e-9,save_everystep=false)
         ψ .= sol_ψ.u[end]
 
         prob_σ = ODEProblem(dψdt!, σ, (t_i, t_f), parameters)
-        sol_σ = solve(prob_σ, BS3(), abstol=1e-10, reltol=1e-11,save_everystep=false)
+        sol_σ = solve(prob_σ, BS3(), abstol=1e-9, reltol=1e-9,save_everystep=false)
         σ .= sol_σ.u[end]  
     end
 
-    return dΩ
-end
-function gradient_timestep()
-    dΩ_dt = zeros(Float64, n_sites)
-    return "not implemented yet"
+    return ∂Ω
 end
 
-function gradientsignal_direct_exponentiation()
-    return "not implemented yet"
+
+
+
+function gradient_eachtimestep!(∂Ω,
+                                ψ,
+                                σ,
+                                multi_signal,
+                                n_sites,
+                                drives,
+                                eigvals,
+                                t,
+                                time_index,
+                                Δt)
     
+    dim= length(ψ)
+    dH_dΩ = zeros(ComplexF64, dim, dim)
+    device_action = Vector{ComplexF64}(undef, dim)
+    for k in 1:n_sites
+        dH_dΩ .+= exp(im*frequency(multi_signal.channels[k], t)*t).*drives[k]
+        dH_dΩ .+= dH_dΩ'
+
+        # derivative of interaction picture Hamiltonian
+        device_action .= exp.((im*t) .* eigvals)                  
+        expD = Diagonal(device_action)                       
+        lmul!(expD, dH_dΩ); rmul!(dH_dΩ, expD')               
+        AΨ = dH_dΩ * ψ
+
+        # calculate gradient ⟨σ|A|ψ⟩
+        σAψ = -im*Δt * (σ' * AΨ)                       
+        # ⟨σ|A|ψ⟩ + ⟨ψ|A|σ⟩ 
+        ∂Ω[time_index,k] = σAψ + σAψ'                          
+        dH_dΩ .= zeros(dim,dim) 
+    end 
+    
+end
+
+function gradientsignal_direct_exponentiation(ψ0,
+                                        T,
+                                        signals,
+                                        n_sites,
+                                        drives,
+                                        Hstatic,
+                                        n_trotter_steps,
+                                        cost_ham,
+                                        n_signals,
+                                        ∂Ω = Matrix{Float64}(undef, n_signals+1, n_sites))
+           
+    eigvals, eigvecs = eigen(Hstatic)
+    ψ = copy(ψ0)
+    σ = copy(ψ0)
+    t_series=range(0,T,n_trotter_steps+1)
+    dt= T/n_trotter_steps
+    Δt =T/n_signals
+    tmp_σ = zeros(ComplexF64, length(ψ0))
+
+
+    # time evolution with direct exponentiation
+    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvals, dt/2,t_series[1])
+    for i in 2:n_trotter_steps
+        σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvals, dt,t_series[i])
+    end
+    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvals, dt/2,t_series[end])
+    σ .= mul!(tmp_σ,cost_ham,σ) 
+
+
+
+    #time evolution backward for sigma state
+    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvals, dt/2,t_series[end],true)
+    for i in reverse(2:n_trotter_steps)
+        σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvals, dt,t_series[i],true)
+    end
+    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvals, dt/2,t_series[1],true)
+    # 
+
+
+    #calculating gradient by evolving both \psi and \sigma states
+    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvals,t_series[1],1,Δt/2)
+    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvals, Δt/2,t_series[1])
+    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvals, Δt/2,t_series[1])
+    
+    for i in 2:n_signals
+
+        gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvals,t_series[i],i,Δt)
+        ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvals, Δt,t_series[i])
+        σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvals, Δt,t_series[i])
+    
+    end
+    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvals, Δt/2,t_series[end])
+    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvals, Δt/2,t_series[end])
+    return ∂Ω
+
 end

@@ -1,4 +1,5 @@
-# per qubit drive in drive basis
+
+# bosonic annhilation operator 
 function a_q(n_levels)
     a = zeros((n_levels,n_levels))
     for i ∈ 1:n_levels-1
@@ -6,6 +7,8 @@ function a_q(n_levels)
     end
     return a
 end
+
+# bosonic annhilation operator in full hilbert space
 function a_fullspace(n_sites,n_levels,eig_basis)
     a_k = a_q(n_levels) 
     a=Vector{Matrix{Float64}}(undef, n_sites)

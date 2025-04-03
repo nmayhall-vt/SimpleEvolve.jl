@@ -1,3 +1,4 @@
+
 struct DigitizedSignal{T}
     samples::Vector{T}
     δt::Float64
@@ -7,6 +8,9 @@ end
 #     return DigitizedSignal{T}(samples, δt, carrier_freq)
 # end
 
+struct MultiChannelSignal{T}
+    channels::Vector{DigitizedSignal{T}}
+end
 
 function amplitude(signal::DigitizedSignal, t)
     
