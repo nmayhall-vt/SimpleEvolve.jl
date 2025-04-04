@@ -23,6 +23,6 @@ export gradientsignal_direct_exponentiation
 export gradientsignal_ODE
 export MultiChannelSignal
 export single_trotter_exponentiation_step
-
+export grad_signal_expansion
 
 end

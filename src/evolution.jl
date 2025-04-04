@@ -8,10 +8,10 @@ using DifferentialEquations
 
 function dψdt!(dψ,ψ,parameters,t)
 
-    signals=parameters[1]
-    n_sites = parameters[2]
-    drives = parameters[3]
-    eigvals = parameters[4]
+    signals   = parameters[1]
+    n_sites   = parameters[2]
+    drives    = parameters[3]
+    eigvalues = parameters[4]
 
     dim= length(ψ)
     H = zeros(ComplexF64, dim, dim)
@@ -21,7 +21,7 @@ function dψdt!(dψ,ψ,parameters,t)
     end
     H .+= H'
     # constructing interaction picture Hamiltonian
-    device_action .= exp.((-im*t).*eigvals)
+    device_action .= exp.((-im*t).*eigvalues)
     H_interaction = Diagonal(device_action)*H*(Diagonal(device_action))'
 
     # constructing the time derivative or schrodinger equation
@@ -33,16 +33,16 @@ function evolve_ODE(ψ0,
                     signals,
                     n_sites,
                     drives,
-                    Hstatic)
+                    eigvalues)
 
-    eigvals, eigvecs = eigen(Hstatic)
+    # eigvalues, eigvecs = eigen(Hstatic)
     ψ = copy(ψ0)
 
     #evolve the state with ODE
-    parameters = [signals, n_sites, drives, eigvals]
+    parameters = [signals, n_sites, drives, eigvalues]
     prob = ODEProblem(dψdt!, ψ, (0.0,T), parameters)
-    sol = solve(prob, BS3(), abstol=1e-8, reltol=1e-8,save_everystep=false)
-    ψ = sol.u[end]
+    sol  = solve(prob, BS3(), abstol=1e-8, reltol=1e-8,save_everystep=false)
+    ψ .= sol.u[end]
     #normalize the states
     ψ .= ψ/norm(ψ)
     return ψ
@@ -56,26 +56,26 @@ function evolve_direct_exponentiation(ψ0,
                                         signals,
                                         n_sites,
                                         drives,
-                                        Hstatic,
+                                        eigvalues,
                                         n_trotter_steps)
            
-    eigvals, eigvecs = eigen(Hstatic)
+    # eigvalues, eigvecs = eigen(Hstatic)
     ψ = copy(ψ0)
     t_series=range(0,T,n_trotter_steps+1)
     dt= T/n_trotter_steps
     
     # time evolution with direct exponentiation
-    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvals, dt/2,t_series[1])
+    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, dt/2,t_series[1])
     for i in 2:n_trotter_steps
-        ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvals, dt,t_series[i])
+        ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, dt,t_series[i])
     end
-    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvals, dt/2,t_series[end])
+    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, dt/2,t_series[end])
     #normalize the states
     ψ .= ψ/norm(ψ)
     return ψ
 end
 
-function single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvals, dt, t,adjoint=false)
+function single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, dt, t,adjoint=false)
     
     dim= length(ψ)
     H = zeros(ComplexF64, dim, dim)
@@ -85,7 +85,7 @@ function single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvals
     end
     H .+= H'
     # constructing interaction picture Hamiltonian
-    device_action .= exp.((-im*t).*eigvals)
+    device_action .= exp.((-im*t).*eigvalues)
     H_interaction = Diagonal(device_action)*H*(Diagonal(device_action))'
 
     # prepare time evolution operator for the trotter step

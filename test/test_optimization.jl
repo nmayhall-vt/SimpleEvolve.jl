@@ -8,7 +8,7 @@ using LineSearches
 function optimize()
 
     T=20
-    n_samples = 10000
+    n_samples = 100
     δt = T/n_samples
     Random.seed!(2)
     freqs = [0.2,0.21 ]
@@ -33,7 +33,11 @@ function optimize()
     initial_state = "1"^(n_sites÷2) * "0"^(n_sites÷2)
     ψ_initial = zeros(ComplexF64, dim)                              
     ψ_initial[1 + parse(Int, initial_state, base=n_levels)] = one(ComplexF64) 
-
+    #eigenvalues and eigenvectors of the static Hamiltonian
+    eigvalues, eigvecs = eigen(Hstatic)
+    for i in 1:n_sites
+        drives[i] = eigvecs' * drives[i] * eigvecs
+    end
     
     function costfunction(samples)
         # considering the frequency remain as constants
@@ -42,13 +46,16 @@ function optimize()
         samples = reshape(samples, n_samples+1, n_sites)
         signals_= [DigitizedSignal(samples[:,i], δt, freqs[i]) for i in 1:length(freqs)]
         signals= MultiChannelSignal(signals_)
-        energy,ϕ = costfunction_ode(ψ_initial, Hstatic, signals, n_sites, drives, T,C)   
+        energy,ϕ = costfunction_ode(ψ_initial, eigvalues, signals, n_sites, drives, T,C)   
         return energy
     end
      
     # we have to optimize the samples in the signal
-
-
+    
+    n_samples_grad = 100
+    δΩ_ = Matrix{Float64}(undef, n_samples+1, n_sites)
+    ∂Ω = Matrix{Float64}(undef, n_samples_grad+1, n_sites)
+    
     function gradient_ode!(Grad, samples)
         Grad = reshape(Grad, :, n_sites)
         samples = reshape(samples, n_samples+1, n_sites)
@@ -59,17 +66,27 @@ function optimize()
                             signals,
                             n_sites,
                             drives,
-                            Hstatic,
+                            eigvalues,
                             C,
-                            n_samples,
+                            n_samples_grad,
                             ∂Ω)
+        grad_ode_expanded = grad_signal_expansion(δΩ_,
+                            grad_ode,
+                            n_samples_grad,
+                            n_samples,
+                            freqs,
+                            δt,
+                            n_sites,
+                            T)
+        # display(grad_ode_expanded)
         for k in 1:n_sites
             for i in 1:n_samples+1
                 # considering the frequency remain as constants
-                # δΩδt= amplitude(signals.channels[k], i*δt)-amplitude(signals.channels[k], (i-1)*δt)
-                Grad[i,k] = grad_ode[i,k] 
+                Grad[i,k] = grad_ode_expanded[i,k] 
             end
         end
+        
+        # display(Grad)
         return Grad
     end
 
@@ -83,7 +100,7 @@ function optimize()
         show_every = 1,
         f_reltol = 1e-9,
         g_tol = 1e-9,
-        iterations = 10000,
+        iterations = 100,
     )
     # INITIAL PARAMETERS
     samples_matrix = [sin(2π * (t / n_samples)) for t in 0:n_samples, i in 1:n_sites]
@@ -94,6 +111,14 @@ function optimize()
     samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
     optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
     samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
+    optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
+    samples_final = Optim.minimizer(optimization) 
+    optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
+    samples_final = Optim.minimizer(optimization)
+    optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
+    samples_final = Optim.minimizer(optimization)
+    optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
+    samples_final = Optim.minimizer(optimization)
     Λ, U = eigen(C)
     E_actual = Λ[1]
     println("Actual energy: $E_actual")
