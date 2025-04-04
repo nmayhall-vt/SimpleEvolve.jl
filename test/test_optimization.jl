@@ -5,17 +5,18 @@ using Random
 using Optim
 using LineSearches
 
-function optimize()
+# function optimize()
 
     T=20
     n_samples = 100
     δt = T/n_samples
     Random.seed!(2)
-    freqs = [0.2,0.21 ]
+    # freqs = [0.1,0.21,0.22,0.32 ]
+    freqs = [0.4,0.8,0.1,0.1]
     signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples+1], δt, f) for f in freqs]
     signals = MultiChannelSignal(signals_)
 
-    n_sites = 2
+    n_sites = 4
     n_levels = 2
 
     dim = n_levels^n_sites
@@ -28,6 +29,8 @@ function optimize()
         Ak = rand(Float64, dim, dim) 
         push!(drives, Ak)
     end
+    println("Eignvalues of our static Hamiltonian")
+    display(eigvals(Hstatic))
 
     # initial state
     initial_state = "1"^(n_sites÷2) * "0"^(n_sites÷2)
@@ -49,13 +52,16 @@ function optimize()
         energy,ϕ = costfunction_ode(ψ_initial, eigvalues, signals, n_sites, drives, T,C)   
         return energy
     end
-     
+    Λ, U = eigen(C)
+    E_actual = Λ[1]
+    println("Actual energy: $E_actual") 
     # we have to optimize the samples in the signal
     
     n_samples_grad = 100
     δΩ_ = Matrix{Float64}(undef, n_samples+1, n_sites)
-    ∂Ω = Matrix{Float64}(undef, n_samples_grad+1, n_sites)
-    
+    ∂Ω0 = Matrix{Float64}(undef, n_samples_grad+1, n_sites)
+    τ = T/n_samples_grad
+    device_action_independent_t = exp.((-im*τ).*eigvalues)
     function gradient_ode!(Grad, samples)
         Grad = reshape(Grad, :, n_sites)
         samples = reshape(samples, n_samples+1, n_sites)
@@ -67,9 +73,10 @@ function optimize()
                             n_sites,
                             drives,
                             eigvalues,
+                            device_action_independent_t,
                             C,
                             n_samples_grad,
-                            ∂Ω)
+                            ∂Ω0)
         grad_ode_expanded = grad_signal_expansion(δΩ_,
                             grad_ode,
                             n_samples_grad,
@@ -113,14 +120,14 @@ function optimize()
     samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
     optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
     samples_final = Optim.minimizer(optimization) 
-    optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
-    samples_final = Optim.minimizer(optimization)
-    optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
-    samples_final = Optim.minimizer(optimization)
-    optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
-    samples_final = Optim.minimizer(optimization)
+    # optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
+    # samples_final = Optim.minimizer(optimization)
+    # optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
+    # samples_final = Optim.minimizer(optimization)
+    # optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
+    # samples_final = Optim.minimizer(optimization)
     Λ, U = eigen(C)
     E_actual = Λ[1]
     println("Actual energy: $E_actual")
-end
-optimize()
+# end
+# optimize()

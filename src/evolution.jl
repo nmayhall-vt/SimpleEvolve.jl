@@ -42,7 +42,7 @@ function evolve_ODE(ψ0,
     parameters = [signals, n_sites, drives, eigvalues]
     prob = ODEProblem(dψdt!, ψ, (0.0,T), parameters)
     sol  = solve(prob, BS3(), abstol=1e-8, reltol=1e-8,save_everystep=false)
-    ψ .= sol.u[end]
+    ψ   .= sol.u[end]
     #normalize the states
     ψ .= ψ/norm(ψ)
     return ψ

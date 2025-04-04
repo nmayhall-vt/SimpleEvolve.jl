@@ -3,9 +3,9 @@ using LinearAlgebra
 using Plots
 using Random
 function plot_gradient_Signal()
-    ``#plot digitized signal and gradient
+    #plot digitized signal and gradient
     T=10
-    n_samples = 100
+    n_samples = 1000
     δt = T/n_samples
     Random.seed!(2)
     frequency_multichannel = [0.21,0.32]
@@ -35,7 +35,9 @@ function plot_gradient_Signal()
         drives[i] = eigvecs' * drives[i] * eigvecs
     end
     # gradient calculation
-    n_samples_grad = 10
+    n_samples_grad = 1000
+    τ = T/n_samples_grad
+    device_action_independent_t = exp.((-im*τ).*eigvalues)
     ∂Ω = Matrix{Float64}(undef, n_samples_grad+1, n_sites)
     @time grad_ode =gradientsignal_ODE(ψ_initial,
                             T,
@@ -43,14 +45,15 @@ function plot_gradient_Signal()
                             n_sites,
                             drives,
                             eigvalues,
+                            device_action_independent_t,
                             C,
                             n_samples_grad,
                             ∂Ω)
-
+                            
     println("gradient from ODE is ")
     display(grad_ode)
     display(norm(grad_ode))
-    n_trotter_steps = 10000
+    n_trotter_steps = 1000
     dΩ = Matrix{Float64}(undef, n_samples+1, n_sites)
     @time grad_direct =gradientsignal_direct_exponentiation(ψ_initial,
                                             T,
@@ -58,6 +61,7 @@ function plot_gradient_Signal()
                                             n_sites,
                                             drives,
                                             eigvalues,
+                                            device_action_independent_t,
                                             n_trotter_steps,
                                             C,
                                             n_samples,
@@ -105,8 +109,8 @@ function plot_gradient_Signal()
 
     ∇Ω1 = copy(grad_direct)
     ∇Ω_plots1 = plot([plot(pulse_windows, ∇Ω1[:,q]) for q in 1:n_sites]...,
-                    title = "ODE direct",legend = false,layout = (n_sites,1),)
-    plot(Ω_plots, ∇Ω_plots, layout=(1,2))
+                    title = "Trotter direct",legend = false,layout = (n_sites,1),)
+    plot(Ω_plots, ∇Ω_plots,∇Ω_plots1, layout=(1,3))
     # plot(grad_ode[:,1], [amplitude(signal, i*δt) for i in 0:n_samples], marker=:circle)
     savefig("amps_grad.pdf")
 
