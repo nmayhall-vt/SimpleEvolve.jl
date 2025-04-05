@@ -10,7 +10,8 @@ function gradientsignal_ODE(ψ0,
                             device_action_independent_t,
                             cost_ham,
                             n_signals,
-                            ∂Ω=Matrix{Float64}(undef,n_signals+1,n_sites) )
+                            ∂Ω=Matrix{Float64}(undef,n_signals+1,n_sites);
+                            tol_ode=1e-8) 
 
     # eigvalues, eigvecs = eigen(Hstatic)
     tmp_σ = zeros(ComplexF64, length(ψ0))
@@ -22,13 +23,13 @@ function gradientsignal_ODE(ψ0,
     #evolve the sigma state with ODE in forward direction
     parameters = [signals, n_sites, drives,eigvalues]
     prob = ODEProblem(dψdt!, σ, (0.0,T), parameters)
-    sol  = solve(prob, BS3(), abstol=1e-8, reltol=1e-8,save_everystep=false)
+    sol  = solve(prob, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
     σ .= sol.u[end]
     σ .= mul!(tmp_σ,cost_ham,σ)                     # calculate C|ψ⟩    
     
     # reverse time evolution of the sigma state
     prob_ = ODEProblem(dψdt!, σ, (T,0.0), parameters)
-    sol_  = solve(prob_, BS3(), abstol=1e-8, reltol=1e-8,save_everystep=false)
+    sol_  = solve(prob_, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
     σ .= sol_.u[end]
 
     
@@ -36,11 +37,11 @@ function gradientsignal_ODE(ψ0,
     gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,device_action_independent_t,t_[1],1,1/2)
     parameters = [signals, n_sites, drives, eigvalues]
     prob_ψ = ODEProblem(dψdt!, ψ, (0.0,δt/2), parameters)
-    sol_ψ  = solve(prob_ψ, BS3(), abstol=1e-9, reltol=1e-9,save_everystep=false)
+    sol_ψ  = solve(prob_ψ, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
     ψ .= sol_ψ.u[end]
 
     prob_σ = ODEProblem(dψdt!, σ, (0.0, δt/2), parameters)
-    sol_σ  = solve(prob_σ, BS3(), abstol=1e-9, reltol=1e-9,save_everystep=false)
+    sol_σ  = solve(prob_σ, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
     σ .= sol_σ.u[end]
     for i ∈ (2:n_signals)
         t_i = t_[i]-δt/2
@@ -48,21 +49,21 @@ function gradientsignal_ODE(ψ0,
         gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,device_action_independent_t,t_i,i,i)
         parameters = [signals, n_sites, drives, eigvalues]
         prob_ψ = ODEProblem(dψdt!, ψ, (t_i, t_f), parameters)
-        sol_ψ = solve(prob_ψ, BS3(), abstol=1e-9, reltol=1e-9,save_everystep=false)
+        sol_ψ = solve(prob_ψ, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
         ψ .= sol_ψ.u[end]
 
         prob_σ = ODEProblem(dψdt!, σ, (t_i, t_f), parameters)
-        sol_σ  = solve(prob_σ, BS3(), abstol=1e-9, reltol=1e-9,save_everystep=false)
+        sol_σ  = solve(prob_σ, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
         σ .= sol_σ.u[end]  
     end
     gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,device_action_independent_t,t_[end],n_signals+1,(n_signals+1)/2)
     parameters = [signals, n_sites, drives, eigvalues]
     prob_ψ = ODEProblem(dψdt!, ψ, (T-δt/2, T), parameters)
-    sol_ψ  = solve(prob_ψ, BS3(), abstol=1e-9, reltol=1e-9,save_everystep=false)
+    sol_ψ  = solve(prob_ψ, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
     ψ .= sol_ψ.u[end]
 
     prob_σ = ODEProblem(dψdt!, σ, (T-δt/2, T), parameters)
-    sol_σ  = solve(prob_σ, BS3(), abstol=1e-9, reltol=1e-9,save_everystep=false)
+    sol_σ  = solve(prob_σ, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
     σ .= sol_σ.u[end]
 
     return ∂Ω
@@ -100,7 +101,7 @@ function gradient_eachtimestep!(∂Ω,
         # calculate gradient ⟨σ|A|ψ⟩
         σAψ = -im * (σ' * AΨ)
         # σAψ = -im * (σ' * AΨ)*    multi_signal.channels[k].δt  
-                         
+
         # ⟨σ|A|ψ⟩ + ⟨ψ|A|σ⟩ 
         ∂Ω[time_index,k] = σAψ + σAψ'                      
         dH_dΩ .= zeros(dim,dim) 

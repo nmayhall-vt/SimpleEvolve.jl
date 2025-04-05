@@ -58,8 +58,8 @@ function test1()
     for i in 1:n_sites
         drives[i] = eigvecs' * drives[i] * eigvecs
     end
-    #ode evolution 
-    @time energy,ϕ = costfunction_ode(ψ_initial, eigvalues, signals, n_sites, drives, T,C)   
+    #ode evolution
+    @time energy,ϕ = costfunction_ode(ψ_initial, eigvalues, signals, n_sites, drives, T,C,tol_ode=1e-8)   
     println("ode evolved energy is ",energy)
 
     # trotter direct exponentiation evolution

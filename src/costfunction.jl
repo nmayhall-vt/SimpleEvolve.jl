@@ -6,9 +6,10 @@ function costfunction_ode(ψ0,
                          n_sites, 
                          drives, 
                          T, 
-                         Cost_ham)
+                         Cost_ham;
+                         tol_ode=1e-8)
 
-    ψ_ode = evolve_ODE(ψ0, T, signal, n_sites, drives,eigvals)
+    ψ_ode = evolve_ODE(ψ0, T, signal, n_sites, drives,eigvals,tol_ode=tol_ode)
     return real(ψ_ode'*Cost_ham*ψ_ode),  ψ_ode
 end
 

@@ -7,16 +7,19 @@ using LineSearches
 
 # function optimize()
 
-    T=20
-    n_samples = 100
+    T=30
+    n_samples = 300
     δt = T/n_samples
     Random.seed!(2)
-    # freqs = [0.1,0.21,0.22,0.32 ]
-    freqs = [0.4,0.8,0.1,0.1]
+    freqs = [0.2,0.22]
+    freqs = [0.1,0.24,0.6]
+    # freqs = [0.4,0.8,0.1,0.1 ]
+    # freqs = [0.5,0.6,0.3,0.03,0.65]
+    freqs = [0.1,0.55,0.5,0.06,0.25,0.3]
     signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples+1], δt, f) for f in freqs]
     signals = MultiChannelSignal(signals_)
 
-    n_sites = 4
+    n_sites = 6
     n_levels = 2
 
     dim = n_levels^n_sites
@@ -49,7 +52,7 @@ using LineSearches
         samples = reshape(samples, n_samples+1, n_sites)
         signals_= [DigitizedSignal(samples[:,i], δt, freqs[i]) for i in 1:length(freqs)]
         signals= MultiChannelSignal(signals_)
-        energy,ϕ = costfunction_ode(ψ_initial, eigvalues, signals, n_sites, drives, T,C)   
+        energy,ϕ = costfunction_ode(ψ_initial, eigvalues, signals, n_sites, drives, T,C,tol_ode=1e-8)   
         return energy
     end
     Λ, U = eigen(C)
@@ -57,7 +60,7 @@ using LineSearches
     println("Actual energy: $E_actual") 
     # we have to optimize the samples in the signal
     
-    n_samples_grad = 100
+    n_samples_grad = 200
     δΩ_ = Matrix{Float64}(undef, n_samples+1, n_sites)
     ∂Ω0 = Matrix{Float64}(undef, n_samples_grad+1, n_sites)
     τ = T/n_samples_grad
@@ -76,7 +79,8 @@ using LineSearches
                             device_action_independent_t,
                             C,
                             n_samples_grad,
-                            ∂Ω0)
+                            ∂Ω0,
+                            tol_ode=1e-8)
         grad_ode_expanded = grad_signal_expansion(δΩ_,
                             grad_ode,
                             n_samples_grad,

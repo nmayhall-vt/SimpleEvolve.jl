@@ -48,7 +48,8 @@ function plot_gradient_Signal()
                             device_action_independent_t,
                             C,
                             n_samples_grad,
-                            ∂Ω)
+                            ∂Ω,
+                            tol_ode=1e-8)
                             
     println("gradient from ODE is ")
     display(grad_ode)
