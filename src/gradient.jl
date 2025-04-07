@@ -1,5 +1,25 @@
 using SimpleEvolve
 
+"""
+gradientsignal_ODE(ψ0, T, signals, n_sites, drives, eigvalues, device_action_independent_t, cost_ham, n_signals, ∂Ω=Matrix{Float64}(undef,n_signals+1,n_sites); tol_ode=1e-8)
+    Function to compute the gradient of the energy 
+    with respect to the amplitude of the signal using ODE
+    args:
+        ψ0       : Initial state vector
+        T        : Total time for evolution
+        signals   : Signals to be evolved
+        n_sites   : Number of sites in the system
+        drives    : External drives applied to the system
+        eigvalues : Eigenvalues of the Hamiltonian
+        device_action_independent_t: Device action independent time evolution
+        cost_ham  : Cost Hamiltonian
+        n_signals : Number of signals
+        ∂Ω        : Gradient matrix (default is uninitialized)
+        tol_ode   : Tolerance for ODE solver (default is 1e-8)
+    returns:
+        ∂Ω       : Gradient matrix
+
+"""
 
 function gradientsignal_ODE(ψ0,
                             T,
@@ -69,7 +89,26 @@ function gradientsignal_ODE(ψ0,
     return ∂Ω
 end
 
+"""
+gradient_eachtimestep(δΩ, ψ, σ, multi_signal, n_sites, drives, device_action_independent_t, t, time_index, time_factor)
+    Function to compute the gradient of the energy 
+    with respect to the amplitude of the signal at each time step
+    args:
+        δΩ                : Gradient matrix
+        ψ                 : Evolved state vector
+        σ                 : Evolved state vector
+        multi_signal      : Multi-channel signal
+        n_sites           : Number of sites in the system
+        drives            : External drives applied to the system
+        device_action_independent_t: Device action independent time evolution
+        t                 : Current time
+        time_index        : Index of the current time step
+        time_factor       : Time factor for exponentiation on device_action_independent_t
+         to get the interaction Hamiltonian at time t
+    returns:
+        δΩ               : Updated gradient matrix at the current time step
 
+"""
 
 
 function gradient_eachtimestep!(∂Ω,
@@ -97,7 +136,6 @@ function gradient_eachtimestep!(∂Ω,
         expD = Diagonal(device_action)                       
         lmul!(expD, dH_dΩ); rmul!(dH_dΩ, expD')               
         AΨ = dH_dΩ * ψ
-
         # calculate gradient ⟨σ|A|ψ⟩
         σAψ = -im * (σ' * AΨ)
         # σAψ = -im * (σ' * AΨ)*    multi_signal.channels[k].δt  
@@ -108,6 +146,28 @@ function gradient_eachtimestep!(∂Ω,
     end 
     
 end
+
+"""
+gradientsignal_direct_exponentiation(ψ0, T, signals, n_sites, drives, eigvalues, device_action_independent_t, n_trotter_steps, cost_ham, n_signals, ∂Ω=Matrix{Float64}(undef,n_signals+1,n_sites))
+    Function to compute the gradient of the energy 
+    with respect to the amplitude of the signal using direct exponentiation
+    args:
+        ψ0       : Initial state vector
+        T        : Total time for evolution
+        signals   : Signals to be evolved
+        n_sites   : Number of sites in the system
+        drives    : External drives applied to the system
+        eigvalues : Eigenvalues of the Hamiltonian
+        device_action_independent_t: Device action independent time evolution
+        n_trotter_steps: Number of Trotter steps for exponentiation
+        cost_ham  : Cost Hamiltonian
+        n_signals : Number of signals
+        ∂Ω       : Gradient matrix (default is uninitialized)
+    returns:
+        ∂Ω       : Gradient matrix
+
+
+"""
 
 function gradientsignal_direct_exponentiation(ψ0,
                                         T,
@@ -168,18 +228,3 @@ function gradientsignal_direct_exponentiation(ψ0,
 end
 
 
-function grad_signal_expansion(δΩ_,
-                                    grad_ode,
-                                    n_samples_grad,
-                                    n_samples,
-                                    frequency_multichannel,
-                                    δt,
-                                    n_sites,
-                                    T)
-    for k in 1:n_sites
-        grad_ode_k= grad_ode[:,k]
-        grad_signal_k = DigitizedSignal(grad_ode_k, T/n_samples_grad, frequency_multichannel[k])
-        δΩ_[:,k] = [amplitude(grad_signal_k, i*δt) for i in 0:n_samples]
-    end
-    return δΩ_
-end

@@ -4,7 +4,20 @@ using Random
 using LinearAlgebra
 using DifferentialEquations
 
+"""
+dψdt!(dψ, ψ, parameters, t)
+    Function to compute the time derivative of the state vector ψ
+    args:
+        dψ       : Time derivative of the state vector to compute
+        ψ        : Current state vector
+        parameters: Parameters for the Hamiltonian: 
+                    signals, n_sites, drives, eigvalues
+        t        : Current time
+    returns:
+        dψdt     : shrodinger equation
 
+
+"""
 
 function dψdt!(dψ,ψ,parameters,t)
 
@@ -28,6 +41,23 @@ function dψdt!(dψ,ψ,parameters,t)
     dψ .= -im*H_interaction*ψ
 end
 
+"""
+evolve_ODE(ψ0, T, signals, n_sites, drives, eigvalues; tol_ode=1e-8)
+    Function to evolve the state vector using ODE solver
+    args:
+        ψ0       : Initial state vector
+        T        : Total time for evolution
+        signals   : Signals to be evolved
+        n_sites   : Number of sites in the system
+        drives    : External drives applied to the system
+        eigvalues : Eigenvalues of the Hamiltonian
+        tol_ode   : Tolerance for ODE solver (default is 1e-8)
+    returns:
+        ψ        : Evolved state vector
+
+
+"""
+
 function evolve_ODE(ψ0,
                     T,
                     signals,
@@ -50,7 +80,22 @@ function evolve_ODE(ψ0,
 
 end
 
+"""
+evolve_direct_exponentiation(ψ0, T, signals, n_sites, drives, eigvalues, n_trotter_steps)
+    Function to evolve the state vector using direct exponentiation to formulate the time evolution operator
+    args:
+        ψ0       : Initial state vector
+        T        : Total time for evolution
+        signals   : Signals to be evolved
+        n_sites   : Number of sites in the system
+        drives    : External drives applied to the system
+        eigvalues : Eigenvalues of the Hamiltonian
+        n_trotter_steps: Number of Trotter steps for exponentiation
+    returns:
+        ψ        : Evolved state vector
 
+
+"""
 
 function evolve_direct_exponentiation(ψ0,
                                         T,
@@ -76,6 +121,24 @@ function evolve_direct_exponentiation(ψ0,
     return ψ
 end
 
+"""
+single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, dt, t; adjoint=false)
+    Function to perform a single Trotter step for exponentiation
+    args:
+        ψ        : Current state vector
+        signals   : Signals to be evolved
+        n_sites   : Number of sites in the system
+        drives    : External drives applied to the system
+        eigvalues : Eigenvalues of the Hamiltonian
+        dt       : Time step for Trotter step
+        t        : Current time
+        adjoint  : Boolean flag for adjoint operation (default is false)
+                 to evolve the state forward or backward in time
+    returns:
+        device_action: Evolved state vector
+
+"""
+
 function single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, dt, t,adjoint=false)
     
     dim= length(ψ)
@@ -90,12 +153,23 @@ function single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalu
     H_interaction = Diagonal(device_action)*H*(Diagonal(device_action))'
 
     # prepare time evolution operator for the trotter step
-    H_interaction_ = exp((-im*dt*(-1)^adjoint).*H_interaction)
+    H_interaction .= exp((-im*dt*(-1)^adjoint).*H_interaction)
     #
     #apply the time evolution operator
-    ψ .= H_interaction_*ψ
-    return ψ
+    mul!(device_action, H_interaction, ψ)
+    return device_action
 end
+
+"""
+infidelity(ψ, φ)
+    Function to compute the infidelity between two state vectors
+    args:
+        ψ : First state vector
+        φ : Second state vector
+    returns:
+        infidelity value
+
+"""
 function infidelity(ψ,φ)
     return 1 - abs2(ψ'*φ)
 end
