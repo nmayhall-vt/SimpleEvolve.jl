@@ -1,4 +1,20 @@
+"""
+a_q(n_levels)
 
+    Returns the bosonic annihilation operator of dimension n_levels for each qubit in the system.
+    The operator is represented as a matrix of size n_levels x n_levels.
+
+    Parameters
+    ----------
+    n_levels : Int
+        Number of levels in the  basis.
+
+    Returns
+    -------
+    a : Matrix{Float64}
+        Bosonic annihilation operator in the basis.
+
+"""
 # bosonic annhilation operator 
 function a_q(n_levels)
     a = zeros((n_levels,n_levels))
@@ -7,6 +23,28 @@ function a_q(n_levels)
     end
     return a
 end
+
+"""
+a_fullspace(n_sites,n_levels,eig_basis)
+
+    Returns the bosonic annihilation operator in the full Hilbert space of the system.
+    The operator is represented as a matrix of size n_levels^n_sites x n_levels^n_sites.
+
+    Parameters
+    ----------
+    n_sites : Int
+        Number of sites in the system.
+    n_levels : Int
+        Number of levels in the basis.
+    eig_basis : Bool
+        If true, the operator is transformed to the eigenbasis.
+
+    Returns
+    -------
+    a : Vector{Matrix{Float64}}
+        Bosonic annihilation operator in the full Hilbert space.
+
+"""
 
 # bosonic annhilation operator in full hilbert space
 function a_fullspace(n_sites,n_levels,eig_basis)

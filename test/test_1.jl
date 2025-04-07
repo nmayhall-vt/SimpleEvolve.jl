@@ -52,14 +52,19 @@ function test1()
     initial_state = "1"^(n_sites÷2) * "0"^(n_sites÷2)
     ψ_initial = zeros(ComplexF64, dim)                              
     ψ_initial[1 + parse(Int, initial_state, base=n_levels)] = one(ComplexF64) 
-
-    #ode evolution 
-    @time energy,ϕ = costfunction_ode(ψ_initial, Hstatic, signals, n_sites, drives, T,C)   
+    #eigenvalues and eigenvectors of the static Hamiltonian
+    eigvalues, eigvecs = eigen(Hstatic)
+    
+    for i in 1:n_sites
+        drives[i] = eigvecs' * drives[i] * eigvecs
+    end
+    #ode evolution
+    @time energy,ϕ = costfunction_ode(ψ_initial, eigvalues, signals, n_sites, drives, T,C,tol_ode=1e-8)   
     println("ode evolved energy is ",energy)
 
     # trotter direct exponentiation evolution
     n_trotter_steps = 1000 
-    @time energy2,ψ_d = costfunction_direct_exponentiation(ψ_initial, Hstatic, signals, n_sites, drives, T, n_trotter_steps,C)
+    @time energy2,ψ_d = costfunction_direct_exponentiation(ψ_initial, eigvalues, signals, n_sites, drives, T, n_trotter_steps,C)
     println("direct evolved energy is ",energy2)
 
     
