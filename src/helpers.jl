@@ -47,7 +47,7 @@ a_fullspace(n_sites,n_levels,eig_basis)
 """
 
 # bosonic annhilation operator in full hilbert space
-function a_fullspace(n_sites,n_levels,eig_basis)
+function a_fullspace(n_sites,n_levels;eig_basis=nothing)
     a_k = a_q(n_levels) 
     a=Vector{Matrix{Float64}}(undef, n_sites)
     for k in 1:n_sites 
@@ -63,7 +63,7 @@ function a_fullspace(n_sites,n_levels,eig_basis)
         end
         a[k]=A
     end 
-    if eig_basis == true
+    if !(eig_basis === nothing)
         for k in 1:n_sites
             a[k] = eigbasis'*a[k]*eigbasis
         end

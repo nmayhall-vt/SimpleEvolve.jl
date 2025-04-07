@@ -5,7 +5,7 @@ using Random
 using Optim
 using LineSearches
 
-# function optimize()
+function optimize()
 
     T=20
     n_samples = 60
@@ -71,7 +71,7 @@ using LineSearches
     println("Actual energy: $E_actual") 
 
     # we have to optimize the samples in the signal
-    n_samples_grad = 40
+    n_samples_grad = 30
     δΩ_ = Matrix{Float64}(undef, n_samples+1, n_sites)
     ∂Ω0 = Matrix{Float64}(undef, n_samples_grad+1, n_sites)
     τ = T/n_samples_grad
@@ -194,6 +194,6 @@ using LineSearches
     )
     plot(Ω_plots, Ω_plots_final, layout=(1,2))
 
-    # savefig("final_signals_$(n_sites)_$(n_levels).pdf")
-# end
-# optimize()
+    savefig("final_signals_$(n_sites)_$(n_levels).pdf")
+end
+optimize()
