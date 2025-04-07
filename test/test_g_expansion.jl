@@ -7,7 +7,7 @@ T = 30
 n_samples = 200
 δt = T/n_samples
 n_sites = 6
-n_samples_grad = 20
+n_samples_grad = 60
 freqs = [0.2,0.3,0.32,0.24,0.5,0.6]
 
 # Original gradient signal reduced
@@ -42,7 +42,7 @@ validate_and_expand(δΩ,grad_ode_reduced,
                     n_sites, 
                     T, 
                     freqs,
-                    :whittaker_shannon)
+                    :trigonometric)
 # grad_signal_expansion_ti(δΩ, grad_ode_reduced, n_samples_grad, n_samples, rand(n_sites), δt, n_sites, T)
 plot!(δΩ[:,1], label="trigonometric interpolation", color=:red)
 println("Maximum absolute value of the FFT using trigonometric_interpolation: ", maximum(abs.(fft(δΩ[:,1]))[Int(3n_samples/4):end]))

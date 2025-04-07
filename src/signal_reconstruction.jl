@@ -17,28 +17,41 @@ amplitude_ws(signal::DigitizedSignal, t; window_radius=8)
 
 
 """
-
 function amplitude_ws(signal::DigitizedSignal, t; window_radius=8)
+    """
+    Whittaker-Shannon interpolation with Hann-windowed sinc kernel
+    Implements:
+        f(t) = Σ_{n=-R}^{R} [x[n] ⋅ sinc((t - nΔt)/Δt) ⋅ 0.5(1 - cos(2π⋅(τ/(2RΔt) + 0.5)))]
+    where R = window_radius, Δt = sampling interval
+    """
+    # Validate time bounds
     max_time = (length(signal.samples)-1)*signal.δt
     t > max_time && throw(DomainError(t, "Time exceeds signal duration"))
     
-    center_idx = floor(Int, t/signal.δt) + 1
+    # Calculate center index and window bounds
+    center_idx = floor(Int, t/signal.δt) + 1  # n_center = ⌊t/Δt⌋ + 1
     start_idx = max(1, center_idx - window_radius)
     end_idx = min(length(signal.samples), center_idx + window_radius)
     
     sum_val = 0.0
     for n in start_idx:end_idx
+        # Time difference from nth sample: τ = t - (n-1)Δt
         τ = t - (n-1)*signal.δt
+        
+        # Sinc kernel: sinc(τ/Δt) = sin(πτ/Δt)/(πτ/Δt)
         sinc_val = sinc(τ/signal.δt)
         
-        # Continuous Hann window calculation
-        x = (τ/(window_radius*signal.δt) + 1)/2  # Normalized to [0,1]
+        # Hann window function:
+        # w(τ) = 0.5(1 - cos(2π⋅(τ/(2RΔt) + 0.5))) for -RΔt ≤ τ ≤ RΔt
+        x = (τ/(window_radius*signal.δt) + 1)/2  # Normalize τ to [0,1]
         window_val = 0.5 * (1 - cos(2π * x))
         
+        # Accumulate weighted sample contribution
         sum_val += signal.samples[n] * sinc_val * window_val
     end
     return sum_val
 end
+
 """
 downsample(signal::Vector{T}, factor::Int)
     Downsample a signal by a given factor using anti-aliasing
@@ -482,8 +495,8 @@ function reconstruct(signal::DigitizedSignal,
     new_times = range(0, (length(signal.samples)-1)*signal.δt, length=output_samples)
     
     if method == :whittaker_shannon
-        return reconstruct_gradient_ws(signal, output_samples)
-        # return [amplitude_ws(signal, t) for t in new_times]
+        # return reconstruct_gradient_ws(signal, output_samples)
+        return [amplitude_ws(signal, t) for t in new_times]
     elseif method == :linear
         return [amplitude_linear(signal, t) for t in new_times]
     elseif method == :polynomial
