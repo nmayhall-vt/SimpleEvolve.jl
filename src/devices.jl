@@ -1,8 +1,6 @@
 struct QubitCoupling
     qubit_1::Int
     qubit_2::Int
-    
-    # Inner constructor to enforce ordering
     function QubitCoupling(q1::Int, q2::Int)
         if q1 > q2
             return new(q2, q1)
@@ -17,7 +15,7 @@ struct Transmon
     n_sites::Int
     freq::Vector{Float64}
     anharmonicities::Vector{Float64}
-    coupling_map::Dict{QubitCoupling,Float64}  # Fixed typo: QubitCouple → QubitCoupling
+    coupling_map::Dict{QubitCoupling,Float64}  
     
     function Transmon(
         freq::Vector{Float64},
@@ -25,7 +23,7 @@ struct Transmon
         coupling_map::Dict{QubitCoupling,Float64}=Dict{QubitCoupling,Float64}(),
         n_sites::Integer=length(freq)
     )
-        # Truncate arrays and validate couplings
+        # Truncate arrays and filter couplings
         freq = freq[1:n_sites]
         anharmonicities = anharmonicities[1:n_sites]
         
@@ -91,7 +89,7 @@ function static_hamiltonian(device::Transmon, n_levels::Integer=2)
     for q in 1:n
         aq = a_[q]
         H += device.freq[q] * (aq' * aq)  # ω_q a†a term
-        H -= device.anharmonicities[q]/2 * (aq'^2 * aq^2)  # -δ/2 a_q^† a_q^† a_q a_qterm
+        H -= device.anharmonicities[q]/2 * (aq'^2 * aq^2)  # -δ/2 a_q^† a_q^† a_q a_q term
     end
 
     # Coupling terms (∑ g_{pq}(a_p†a_q + a_q†a_p))
