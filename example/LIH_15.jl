@@ -4,7 +4,7 @@ using Plots
 using LinearAlgebra
 using Optim
 using LineSearches
-
+using Random
 Cost_ham = npzread("lih15.npy") 
 display(Cost_ham)
 n_qubits = round(Int, log2(size(Cost_ham,1)))
@@ -24,14 +24,20 @@ device = choose_qubits(1:n_qubits, Transmon(
 ))
 
 
-T=10
-n_samples = 1000
+T=20
+n_samples = 1000# atleast 800  to converge
 δt = T/n_samples
 
 
-# carrier_freqs = [21.97,1.2758,1.886,1.2795]#getting stuck in local minima of -7.75 and moving too slowly
-carrier_freqs = [1.2758,1.886,1.2795,1.90]
-signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
+# carrier_freqs = [21.97,1.2758,1.886,1.2795] #getting stuck in local minima of -7.75 and moving too slowly
+# carrier_freqs = [1.2758,1.886,1.2795,1.90]
+# carrier_freqs = [21.97,18.59,18.80,21.97]  
+carrier_freqs =[23.876104167282428,
+27.01769682087222,
+22.61946710584651,
+25.761059759436304]
+display(carrier_freqs)
+signals_ = [DigitizedSignal([(sin(f*(t/n_samples))+cos(f*(t/n_samples))) for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals = MultiChannelSignal(signals_)
 
 
@@ -121,7 +127,7 @@ options = Optim.Options(
 
 
 # INITIAL PARAMETERS
-samples_matrix=[sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
+samples_matrix=[sin(carrier_freqs[i]*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
 pulse_windows=range(0, T, length=n_samples+1)
 
 

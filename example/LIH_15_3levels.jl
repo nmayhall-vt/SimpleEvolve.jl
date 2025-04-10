@@ -4,12 +4,12 @@ using Plots
 using LinearAlgebra
 using Optim
 using LineSearches
-
-Cost_ham = npzread("lih30.npy") 
+using Random
+Cost_ham = npzread("lih15.npy") 
 display(Cost_ham)
 n_qubits = round(Int, log2(size(Cost_ham,1)))
 n_levels = 3
-SYSTEM="lih30"
+SYSTEM="lih15"
 device = choose_qubits(1:n_qubits, Transmon(
     2π*[3.7, 4.2, 3.5, 4.0],                    # QUBIT RESONANCE FREQUENCIES
     2π*[0.3, 0.3, 0.3, 0.3],                    # QUBIT ANHARMONICITIES
@@ -24,28 +24,25 @@ device = choose_qubits(1:n_qubits, Transmon(
 ))
 
 
-T=15
-n_samples = 1000 
+T=20
+n_samples = 1000
 δt = T/n_samples
 
-# carrier_freqs = [21.97,1.2758,1.886,1.2795]
-# carrier_freqs = [1.2758,1.886,1.2795,1.48]
-# carrier_freqs = [21.97,18.59,18.80,21.97]
-carrier_freqs =[23.876104167282428,
-27.01769682087222,
-22.61946710584651,
-25.761059759436304]
-signals_ = [DigitizedSignal([(sin(f*(t/n_samples))+cos(f*(t/n_samples))) for t in 0:n_samples], δt, f) for f in carrier_freqs]
+
+# carrier_freqs = [21.97,1.2758,1.886,1.2795] #getting stuck in local minima of -7.75 and moving too slowly
+# carrier_freqs = [1.2758,1.886,1.2795,1.90]
+carrier_freqs = [21.97,18.59,18.80,21.97]   
+display(carrier_freqs)
+signals_ = [DigitizedSignal([sin(f*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals = MultiChannelSignal(signals_)
-# redefining the subspace for molecular Hamiltonian to work with preferred level of states
-Π = projector(n_qubits, 2, n_levels)    
-Cost_ham = Hermitian(Π'*Cost_ham*Π)  
+
 
 # initial state
 initial_state = "1"^(n_qubits÷2) * "0"^(n_qubits÷2)
 ψ_initial = zeros(ComplexF64, n_levels^n_qubits)                              
 ψ_initial[1 + parse(Int, initial_state, base=n_levels)] = one(ComplexF64) 
-
+Π = projector(n_qubits, 2, n_levels)    
+Cost_ham = Hermitian(Π'*Cost_ham*Π)  
 
 H_static = static_hamiltonian(device, n_levels)
 #eigenvalues and eigenvectors of the static Hamiltonian
@@ -137,6 +134,14 @@ optimization = Optim.optimize(costfunction, gradient_ode!, samples_initial, opti
 samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
 optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
 samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
+optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
+samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
+optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
+samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
+optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
+samples_final = Optim.minimizer(optimization)     # FINAL PARAMETERS
+
+
 
 
 samples_final_reshaped = reshape(samples_final, n_samples+1, n_qubits)

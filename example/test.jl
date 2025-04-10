@@ -5,41 +5,31 @@ using LinearAlgebra
 using Optim
 using LineSearches
 
-Cost_ham = npzread("lih30.npy") 
+Cost_ham = npzread("h207.npy") 
 display(Cost_ham)
 n_qubits = round(Int, log2(size(Cost_ham,1)))
-n_levels = 3
-SYSTEM="lih30"
-device = choose_qubits(1:n_qubits, Transmon(
-    2π*[3.7, 4.2, 3.5, 4.0],                    # QUBIT RESONANCE FREQUENCIES
-    2π*[0.3, 0.3, 0.3, 0.3],                    # QUBIT ANHARMONICITIES
-    Dict{QubitCoupling,Float64}(                # QUBIT COUPLING CONSTANTS
-        QubitCoupling(1,2) => 2π*.018,
-        QubitCoupling(2,3) => 2π*.021,
-        QubitCoupling(3,4) => 2π*.020,
-        QubitCoupling(1,3) => 2π*.021,
-        QubitCoupling(2,4) => 2π*.020,
-        QubitCoupling(1,4) => 2π*.021,
-    )
-))
+n_levels = 2
+SYSTEM="h207_test"
+
+freqs = 2π*collect(4.8 .+ (0.02 * (1:n_qubits)))
+anharmonicities = 2π*0.3 * ones(n_qubits)
+coupling_map = Dict{QubitCoupling,Float64}()
+for p in 1:n_qubits
+    q = (p == n_qubits) ? 1 : p + 1
+    coupling_map[QubitCoupling(p,q)] = 2π*0.02
+end
+device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
-T=15
-n_samples = 1000 
+T=10
+n_samples = 1000
 δt = T/n_samples
 
-# carrier_freqs = [21.97,1.2758,1.886,1.2795]
-# carrier_freqs = [1.2758,1.886,1.2795,1.48]
-# carrier_freqs = [21.97,18.59,18.80,21.97]
-carrier_freqs =[23.876104167282428,
-27.01769682087222,
-22.61946710584651,
-25.761059759436304]
-signals_ = [DigitizedSignal([(sin(f*(t/n_samples))+cos(f*(t/n_samples))) for t in 0:n_samples], δt, f) for f in carrier_freqs]
+
+carrier_freqs = [30.2,0.30]
+# # carrier_freqs = [30.2,0.30,28.18]
+signals_ = [DigitizedSignal([(sin(2π*(t/n_samples))+cos(2π*(t/n_samples))) for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals = MultiChannelSignal(signals_)
-# redefining the subspace for molecular Hamiltonian to work with preferred level of states
-Π = projector(n_qubits, 2, n_levels)    
-Cost_ham = Hermitian(Π'*Cost_ham*Π)  
 
 # initial state
 initial_state = "1"^(n_qubits÷2) * "0"^(n_qubits÷2)
@@ -53,7 +43,7 @@ drives =a_fullspace(n_qubits, n_levels)
 eigvalues, eigvecs = eigen(H_static)
 println("Eignvalues of our static Hamiltonian")
 display(eigvals(H_static))
-tol_ode=1e-10
+
 
 Λ, U = eigen(Cost_ham)
 E_actual = Λ[1]
@@ -63,6 +53,8 @@ display(eigvecs)
 for i in 1:n_qubits
     drives[i] = eigvecs' * drives[i] * eigvecs
 end
+tol_ode=1e-10
+
 
 function costfunction(samples)
     # considering the frequency remain as constants
@@ -99,7 +91,7 @@ function gradient_ode!(Grad, samples)
                             n_samples_grad,
                             ∂Ω0,
                             tol_ode=tol_ode)
-
+   
     for k in 1:n_qubits
         for i in 1:n_samples+1
             # considering the frequency remain as constants
@@ -114,8 +106,8 @@ end
 
 # OPTIMIZATION ALGORITHM
 linesearch = LineSearches.MoreThuente()
-# optimizer = Optim.BFGS(linesearch=linesearch)
-optimizer = Optim.LBFGS(linesearch=linesearch)
+optimizer = Optim.BFGS(linesearch=linesearch)
+# optimizer = Optim.LBFGS(linesearch=linesearch)
 # OPTIMIZATION OPTIONS
 options = Optim.Options(
         show_trace = true,
@@ -127,7 +119,7 @@ options = Optim.Options(
 
 
 # INITIAL PARAMETERS
-samples_matrix=[sin(carrier_freqs[i]*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
+samples_matrix=[sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
 pulse_windows=range(0, T, length=n_samples+1)
 
 
@@ -137,6 +129,14 @@ optimization = Optim.optimize(costfunction, gradient_ode!, samples_initial, opti
 samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
 optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
 samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
+optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
+samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
+optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
+samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
+optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
+samples_final = Optim.minimizer(optimization)     # FINAL PARAMETERS
+
+
 
 
 samples_final_reshaped = reshape(samples_final, n_samples+1, n_qubits)
@@ -161,4 +161,4 @@ pulse_windows=range(0, T, length=n_samples+1)
 )
 plot(Ω_plots, Ω_plots_final, layout=(1,2))
 
-savefig("final_signals_$(n_qubits)_$(n_levels)_$(SYSTEM).pdf")
+savefig("final_signals_$(n_qubits)_$(n_levels)$(SYSTEM).pdf")
