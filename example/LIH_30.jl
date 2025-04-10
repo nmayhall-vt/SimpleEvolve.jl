@@ -24,8 +24,8 @@ device = choose_qubits(1:n_qubits, Transmon(
 ))
 
 
-T=30
-n_samples = 20
+T=10
+n_samples = 1000
 δt = T/n_samples
 
 carrier_freqs = [21.97,1.2758,1.886,1.2795]
@@ -106,8 +106,8 @@ end
 
 # OPTIMIZATION ALGORITHM
 linesearch = LineSearches.MoreThuente()
-optimizer = Optim.BFGS(linesearch=linesearch)
-# optimizer = Optim.LBFGS(linesearch=linesearch)
+# optimizer = Optim.BFGS(linesearch=linesearch)
+optimizer = Optim.LBFGS(linesearch=linesearch)
 # OPTIMIZATION OPTIONS
 options = Optim.Options(
         show_trace = true,

@@ -33,6 +33,6 @@ export Transmon
 export QubitCoupling
 export choose_qubits
 export validate_and_expand
-
+export projector
 
 end

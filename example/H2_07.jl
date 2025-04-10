@@ -21,8 +21,8 @@ end
 device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
-T=30
-n_samples = 25
+T=10
+n_samples = 500
 δt = T/n_samples
 
 

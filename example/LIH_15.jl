@@ -24,12 +24,13 @@ device = choose_qubits(1:n_qubits, Transmon(
 ))
 
 
-T=30
-n_samples = 20
+T=10
+n_samples = 1000
 δt = T/n_samples
 
 
-carrier_freqs = [21.97,1.2758,1.886,1.2795]
+# carrier_freqs = [21.97,1.2758,1.886,1.2795]#getting stuck in local minima of -7.75 and moving too slowly
+carrier_freqs = [1.2758,1.886,1.2795,1.90]
 signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals = MultiChannelSignal(signals_)
 
@@ -107,8 +108,8 @@ end
 
 # OPTIMIZATION ALGORITHM
 linesearch = LineSearches.MoreThuente()
-optimizer = Optim.BFGS(linesearch=linesearch)
-# optimizer = Optim.LBFGS(linesearch=linesearch)
+# optimizer = Optim.BFGS(linesearch=linesearch)
+optimizer = Optim.LBFGS(linesearch=linesearch)
 # OPTIMIZATION OPTIONS
 options = Optim.Options(
         show_trace = true,
