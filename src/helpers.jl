@@ -47,7 +47,7 @@ a_fullspace(n_sites,n_levels,eig_basis)
 """
 
 # bosonic annhilation operator in full hilbert space
-function a_fullspace(n_sites,n_levels,eig_basis)
+function a_fullspace(n_sites,n_levels;eig_basis=nothing)
     a_k = a_q(n_levels) 
     a=Vector{Matrix{Float64}}(undef, n_sites)
     for k in 1:n_sites 
@@ -63,7 +63,7 @@ function a_fullspace(n_sites,n_levels,eig_basis)
         end
         a[k]=A
     end 
-    if eig_basis == true
+    if !(eig_basis === nothing)
         for k in 1:n_sites
             a[k] = eigbasis'*a[k]*eigbasis
         end
@@ -71,3 +71,37 @@ function a_fullspace(n_sites,n_levels,eig_basis)
     end                          
     return a
 end
+
+
+"""
+    projector(n_sites::Integer, n_levels::Integer, n_levels0::Integer)
+
+Project a Hilbert space of `n_sites` `n_levels0`-level qubits onto that of `n_sites` `n_levels`-level qubits
+
+Returns an (`n_sites^n_levels`, `n_sites^n_levels`) shaped matrix `Π`.
+To perform the projection on a vector, use ψ ← Πψ.
+To perform the projection on a matrix, use A ← ΠAΠ'.
+
+"""
+function projector(n::Integer, m::Integer, m0::Integer)
+    
+    if m < m0
+        return projector(n, m0, m)'
+    end   
+
+    z = Vector{Int}(undef, n)        # Stores base-`m` digit decomposition
+    N  = m^n; N0 = m0^n             # Dimensions of larger/smaller spaces
+    Id = Matrix{Bool}(I, N, N)      # Identity matrix for larger space
+    Π = Matrix{Bool}(undef, N, N0)  # Projector matrix (N×N0)
+    j = 1                           # Column index for Π
+
+    for i ∈ 1:N                     # Iterate over columns of larger space
+        digits!(z, i-1, base=m)     # Decompose index i-1 into base-`m` digits
+        if any(z .>= m0); continue; end  # Skip invalid indices
+        Π[:,j] .= Id[:,i]           # Copy valid column from identity
+        j += 1                      # Move to next column in Π
+    end
+    
+    return Π
+end
+
