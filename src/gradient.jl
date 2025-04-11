@@ -54,7 +54,7 @@ function gradientsignal_ODE(ψ0,
 
     
     #calculating gradient by evolving both \psi and \sigma states
-    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,device_action_independent_t,t_[1],1,1/2)
+    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,device_action_independent_t,t_[1],1,t_[1]/δt)
     parameters = [signals, n_sites, drives, eigvalues]
     prob_ψ = ODEProblem(dψdt!, ψ, (0.0,δt/2), parameters)
     sol_ψ  = solve(prob_ψ, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
@@ -66,7 +66,7 @@ function gradientsignal_ODE(ψ0,
     for i ∈ (2:n_signals)
         t_i = t_[i]-δt/2
         t_f = t_[i]+δt/2
-        gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,device_action_independent_t,t_i,i,i)
+        gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,device_action_independent_t,t_i,i,t_i/δt)
         parameters = [signals, n_sites, drives, eigvalues]
         prob_ψ = ODEProblem(dψdt!, ψ, (t_i, t_f), parameters)
         sol_ψ = solve(prob_ψ, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
@@ -76,7 +76,7 @@ function gradientsignal_ODE(ψ0,
         sol_σ  = solve(prob_σ, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
         σ .= sol_σ.u[end]  
     end
-    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,device_action_independent_t,t_[end],n_signals+1,(n_signals+1)/2)
+    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,device_action_independent_t,(t_[end]-δt/2),n_signals+1,(t_[end]-δt/2)/δt)
     parameters = [signals, n_sites, drives, eigvalues]
     prob_ψ = ODEProblem(dψdt!, ψ, (T-δt/2, T), parameters)
     sol_ψ  = solve(prob_ψ, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
