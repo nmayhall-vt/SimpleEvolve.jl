@@ -191,38 +191,38 @@ function gradientsignal_direct_exponentiation(ψ0,
 
 
     # time evolution with direct exponentiation
-    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, device_action_independent_t, dt/2,t_series[1])
+    σ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, dt/2,t_series[1])
     for i in 2:n_trotter_steps
-        σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, device_action_independent_t, dt,t_series[i])
+        σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, dt,t_series[i])
     end
-    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, device_action_independent_t, dt/2,t_series[end])
+    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, dt/2,t_series[end])
     σ .= mul!(tmp_σ,cost_ham,σ) 
 
 
 
     #time evolution backward for sigma state
-    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, device_action_independent_t, dt/2,t_series[end],true)
+    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives,eigvalues, dt/2,t_series[end],true)
     for i in reverse(2:n_trotter_steps)
-        σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, device_action_independent_t, dt,t_series[i],true)
+        σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, dt,t_series[i],true)
     end
-    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, device_action_independent_t, dt/2,t_series[1],true)
+    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, dt/2,t_series[1],true)
     # 
 
 
     #calculating gradient by evolving both \psi and \sigma states
-    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,device_action_independent_t,t_series[1],1,1/2)
-    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, device_action_independent_t, Δt/2,t_series[1])
-    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, device_action_independent_t, Δt/2,t_series[1])
+    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,device_action_independent_t,t_series[1],1,t_series[1]/Δt)
+    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, Δt/2,t_series[1])
+    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, Δt/2,t_series[1])
     
     for i in 2:n_signals
-        gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,device_action_independent_t,t_series[i],i,i)
-        ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, device_action_independent_t, Δt,t_series[i])
-        σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, device_action_independent_t, Δt,t_series[i])
+        gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,device_action_independent_t,t_series[i],i,t_series[i]/Δt)
+        ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, Δt,t_series[i])
+        σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, Δt,t_series[i])
     
     end
-    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,device_action_independent_t,t_series[end],n_signals+1,(n_signals+1)/2)
-    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, device_action_independent_t, Δt/2,t_series[end])
-    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, device_action_independent_t, Δt/2,t_series[end])
+    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,device_action_independent_t,t_series[end],n_signals+1,(t_series[end]-Δt/2)/Δt)
+    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, Δt/2,t_series[end])
+    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, Δt/2,t_series[end])
     return ∂Ω
 
 end

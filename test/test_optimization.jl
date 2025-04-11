@@ -7,8 +7,8 @@ using LineSearches
 
 function optimize()
 
-    T=20
-    n_samples = 60
+    T=10
+    n_samples = 400
     δt = T/n_samples
     Random.seed!(2)
 
@@ -71,7 +71,7 @@ function optimize()
     println("Actual energy: $E_actual") 
 
     # we have to optimize the samples in the signal
-    n_samples_grad = 30
+    n_samples_grad = 200
     δΩ_ = Matrix{Float64}(undef, n_samples+1, n_sites)
     ∂Ω0 = Matrix{Float64}(undef, n_samples_grad+1, n_sites)
     τ = T/n_samples_grad
