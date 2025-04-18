@@ -58,7 +58,8 @@ function gradientsignal_ODE(ψ0,
     σ .*=exp.((im*T)*eigvalues)               # rotate phases for final exp(iHDT)
     transform!(σ, eigvectors, tmpV)           # transform the state to the eigenspace
 
-    parameters = [signals, n_sites, drives,eigvalues,false]
+    parameters = [signals, n_sites, drives,eigvalues,false] #should it be true? 
+    # or the time already taking care of it in solve function, I could not find any solid proof/evidence of it
     prob_ = ODEProblem(dψdt!, σ, (T,0.0), parameters)
     sol_  = solve(prob_, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
     σ .= sol_.u[end]
@@ -66,8 +67,7 @@ function gradientsignal_ODE(ψ0,
     
     #calculating gradient by evolving both ψ and σ states
     gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,eigvectors,t_[1],1)
-    parameters = [signals, n_sites, drives, eigvalues,false] #should it be true? 
-    # or the time already taking care of it in solve function, I could not find any solid proof/evidence of it
+    parameters = [signals, n_sites, drives, eigvalues,false] 
     prob_ψ = ODEProblem(dψdt!, ψ, (0.0,δt/2), parameters)
     sol_ψ  = solve(prob_ψ, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
     ψ .= sol_ψ.u[end]
@@ -412,7 +412,7 @@ function _step(ψ, t, τ, signals,n_qubits, a, tmpV, tmpM_, tmpK_, adjoint=false
         ν = frequency(signals.channels[q], t)
         z = Ω * exp(im*ν*t)
         tmpM_[q] .= z .* a  
-        
+
         # construct the time evolution operator
         tmpM_[q] .= exp(( ((-1)^adjoint)* -im*τ) .* Hermitian(tmpM_[q]))
     end
