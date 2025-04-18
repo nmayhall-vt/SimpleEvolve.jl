@@ -20,14 +20,16 @@ end
 device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
-T=30
-n_samples = 20
+T=20
+n_samples = 10000
 δt = T/n_samples
 
 
-carrier_freqs = [30.2,0.30]
-# carrier_freqs = [30.2,0.30,28.18]
-signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
+
+carrier_freqs = [30.207288739056587,30.48828132829821]
+# signals_ = [DigitizedSignal([2π*0.02* sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
+signals_ = [DigitizedSignal([2*sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
+
 signals = MultiChannelSignal(signals_)
 
 
@@ -72,24 +74,38 @@ n_samples_grad = n_samples
 ∂Ω0 = Matrix{Float64}(undef, n_samples_grad+1, n_qubits)
 τ = T/n_samples_grad
 device_action_independent_t = exp.((-im*τ).*eigvalues)
+a=a_q(n_levels)
+tol_ode=1e-10
 
 function gradient_ode!(Grad, samples)
     Grad = reshape(Grad, :, n_qubits)
     samples = reshape(samples, n_samples+1, n_qubits)
     signals_= [DigitizedSignal(samples[:,i], δt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
     signals= MultiChannelSignal(signals_)
-    grad_ode =gradientsignal_ODE(ψ_initial,
+    grad_ode =gradientsignal_ODE_rotate(ψ_initial,
                             T,
                             signals,
                             n_qubits,
+                            n_levels,
                             drives,
+                            a,
                             eigvalues,
-                            device_action_independent_t,
+                            eigvecs,
                             Cost_ham,
                             n_samples_grad,
-                            ∂Ω0,
+                            ∂Ω0;
                             tol_ode=tol_ode)
-
+    # grad_ode =gradientsignal_ODE(ψ_initial,
+    #                         T,
+    #                         signals,
+    #                         n_qubits,
+    #                         drives,
+    #                         eigvalues,
+    #                         eigvecs,
+    #                         Cost_ham,
+    #                         n_samples_grad,
+    #                         ∂Ω0;
+    #                         tol_ode=tol_ode)
     for k in 1:n_qubits
         for i in 1:n_samples+1
             # considering the frequency remain as constants
@@ -104,8 +120,8 @@ end
 
 # OPTIMIZATION ALGORITHM
 linesearch = LineSearches.MoreThuente()
-optimizer = Optim.BFGS(linesearch=linesearch)
-# optimizer = Optim.LBFGS(linesearch=linesearch)
+# optimizer = Optim.BFGS(linesearch=linesearch)
+optimizer = Optim.LBFGS(linesearch=linesearch)
 # OPTIMIZATION OPTIONS
 options = Optim.Options(
         show_trace = true,
@@ -117,8 +133,35 @@ options = Optim.Options(
 
 
 # INITIAL PARAMETERS
-samples_matrix=[sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
+# samples_matrix=[2π*0.02*sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
+samples_matrix=[2*sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
 pulse_windows=range(0, T, length=n_samples+1)
+
+samples_initial=reshape(samples_matrix, :)
+Grad = zeros(Float64, n_samples+1, n_qubits)
+grad_initial=gradient_ode!(Grad, samples_initial)
+Ω0=copy(samples_matrix)
+
+pulse_windows=range(0, T, length=n_samples+1)
+Ω_plots = plot(                       
+    [plot(
+            pulse_windows, Ω0[:,q]
+    ) for q in 1:n_qubits]...,
+    title = "Initial Signals",
+    legend = false,
+    layout = (n_qubits,1),
+)
+grad_plots=plot(                       
+    [plot(
+            pulse_windows, grad_initial[:,q]
+    ) for q in 1:n_qubits]...,
+    title = "Initial Gradients",
+    legend = false,
+    layout = (n_qubits,1),
+)
+plot(Ω_plots, grad_plots, layout=(1,2))
+savefig("initial_signals_$(n_qubits)_$(n_levels)_$(SYSTEM)_$(n_samples)_$(T).pdf")
+
 
 
 samples_initial=reshape(samples_matrix, :)
@@ -159,4 +202,4 @@ pulse_windows=range(0, T, length=n_samples+1)
 )
 plot(Ω_plots, Ω_plots_final, layout=(1,2))
 
-savefig("final_signals_$(n_qubits)_$(n_levels)_$(SYSTEM).pdf")
+savefig("final_signals_$(n_qubits)_$(n_levels)_$(SYSTEM)_$(n_samples)_$(T).pdf")

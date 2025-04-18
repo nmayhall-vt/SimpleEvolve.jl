@@ -25,8 +25,10 @@ function dψdt!(dψ,ψ,parameters,t)
     n_sites   = parameters[2]
     drives    = parameters[3]
     eigvalues = parameters[4]
+    adjoint   = parameters[5]
 
     dim= length(ψ)
+    # println(t)
     H = zeros(ComplexF64, dim, dim)
     device_action = Vector{ComplexF64}(undef, dim)
     for k in 1:n_sites
@@ -34,7 +36,7 @@ function dψdt!(dψ,ψ,parameters,t)
     end
     H .+= H'
     # constructing interaction picture Hamiltonian
-    device_action .= exp.((-im*t).*eigvalues)
+    device_action .= exp.((-im*t*(-1)^adjoint).*eigvalues)
     H_interaction = Diagonal(device_action)*H*(Diagonal(device_action))'
 
     # constructing the time derivative or schrodinger equation
@@ -70,7 +72,7 @@ function evolve_ODE(ψ0,
     ψ = copy(ψ0)
 
     #evolve the state with ODE
-    parameters = [signals, n_sites, drives, eigvalues]
+    parameters = [signals, n_sites, drives, eigvalues,false]
     prob = ODEProblem(dψdt!, ψ, (0.0,T), parameters)
     sol  = solve(prob, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
     ψ   .= sol.u[end]

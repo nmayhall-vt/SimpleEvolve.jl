@@ -26,7 +26,7 @@ export gradientsignal_ODE
 export MultiChannelSignal
 export single_trotter_exponentiation_step
 export grad_signal_expansion
-
+export gradientsignal_ODE_rotate
 
 export static_hamiltonian
 export Transmon
@@ -34,5 +34,6 @@ export QubitCoupling
 export choose_qubits
 export validate_and_expand
 export projector
-
+export transform!
+export kron_concat
 end
