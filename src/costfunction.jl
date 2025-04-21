@@ -20,12 +20,14 @@ function costfunction_ode(ψ0,
                          eigvals,
                          signal, 
                          n_sites, 
-                         drives, 
+                         drives,
+                         eigvectors, 
                          T, 
                          Cost_ham;
                          tol_ode=1e-8)
-
+    tmp_ψ = zeros(ComplexF64, length(ψ0))
     ψ_ode = evolve_ODE(ψ0, T, signal, n_sites, drives,eigvals,tol_ode=tol_ode)
+    transform!(ψ_ode, eigvectors, tmp_ψ)           # transform the state to the eigenspace
     return real(ψ_ode'*Cost_ham*ψ_ode),  ψ_ode
 end
 """
@@ -64,5 +66,7 @@ function costfunction_direct_exponentiation(ψ0,
                                             Cost_ham)
 
     ψ_direct = evolve_direct_exponentiation(ψ0, T, signal, n_sites, drives, eigvals, n_trotter_steps)
+    tmp_ψ = zeros(ComplexF64, length(ψ0))
+    transform!(ψ_direct, eigvectors, tmp_ψ)           # transform the state to the eigenspace
     return real(ψ_direct'*Cost_ham*ψ_direct), ψ_direct
 end

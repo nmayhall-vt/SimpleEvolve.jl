@@ -1,5 +1,7 @@
 module SimpleEvolve
-
+using SciMLSensitivity
+using ReverseDiff
+using ForwardDiff
 
 include("signal.jl")
 include("evolution.jl")

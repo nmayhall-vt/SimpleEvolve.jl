@@ -74,7 +74,9 @@ function evolve_ODE(ψ0,
     #evolve the state with ODE
     parameters = [signals, n_sites, drives, eigvalues,false]
     prob = ODEProblem(dψdt!, ψ, (0.0,T), parameters)
-    sol  = solve(prob, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
+    sol = solve(prob, BS3(); reltol=tol_ode, abstol=tol_ode, 
+                sensealg=InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true)))
+    
     ψ   .= sol.u[end]
     #normalize the states
     ψ .= ψ/norm(ψ)
