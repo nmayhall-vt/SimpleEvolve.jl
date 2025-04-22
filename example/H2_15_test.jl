@@ -22,8 +22,8 @@ end
 device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
-T=10
-n_samples = 1000
+T=20
+n_samples = 10000
 δt = T/n_samples
 
 
@@ -216,8 +216,8 @@ println("trotter evolved energy is ",energy3)
 
 # OPTIMIZATION ALGORITHM
 linesearch = LineSearches.MoreThuente()
-optimizer = Optim.BFGS(linesearch=linesearch)
-# optimizer = Optim.LBFGS(linesearch=linesearch)
+# optimizer = Optim.BFGS(linesearch=linesearch)
+optimizer = Optim.LBFGS(linesearch=linesearch)
 # OPTIMIZATION OPTIONS
 options = Optim.Options(
         show_trace = true,
@@ -236,10 +236,10 @@ Grad = zeros(Float64, n_samples+1, n_qubits)
 grad_initial_direct=gradient_direct_exp!(Grad, samples_initial)
 Grad = zeros(Float64, n_samples+1, n_qubits)
 grad_rotate_ode=gradient_rotate_ode(Grad, samples_initial)
-# method = "trotter"
+method = "trotter"
 # method = "ode"
 # method = "direct"
-method = "rotate_ode"
+# method = "rotate_ode"
 Ω0=copy(samples_matrix)
 
 pulse_windows=range(0, T, length=n_samples+1)
@@ -251,14 +251,31 @@ pulse_windows=range(0, T, length=n_samples+1)
 )
 grad_plots=plot(                       
     [plot(
-            pulse_windows, grad_rotate_ode[:,q]
+            pulse_windows, grad_initial__[:,q]
     ) for q in 1:n_qubits]...,
-    title = "Initial Gradients",
+    title = "Rotate Trotter Gradients",
     legend = false,
     layout = (n_qubits,1),
 )
-plot(Ω_plots, grad_plots, layout=(1,2))
-savefig("initial_signals_$(n_qubits)_$(n_levels)_$(SYSTEM)_$(n_samples)_$(T)_$(method).pdf")
+grad_plots2=plot(                       
+    [plot(
+            pulse_windows, grad_initial[:,q]
+    ) for q in 1:n_qubits]...,
+    title = " ODE Gradients",
+    legend = false,
+    layout = (n_qubits,1),
+)
+grad_plots3=plot(                       
+    [plot(
+            pulse_windows, grad_initial_direct[:,q]
+    ) for q in 1:n_qubits]...,
+    title = "Direct Trotter Gradients",
+    legend = false,
+    layout = (n_qubits,1),
+)
+
+plot(Ω_plots, grad_plots,grad_plots2,grad_plots3, layout=(2,2))
+savefig("initial_signals_$(n_qubits)_$(n_levels)_$(SYSTEM)_$(n_samples)_$(T)_$(method)_.pdf")
 
 
 
@@ -270,21 +287,21 @@ Grad = zeros(Float64, n_samples+1, n_qubits)
 # samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
 # optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_final, optimizer, options)
 # samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
-# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_initial, optimizer, options)
-# samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
-# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
-# samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
-# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
-# samples_final = Optim.minimizer(optimization) 
-# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
-# samples_final = Optim.minimizer(optimization) 
+optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_initial, optimizer, options)
+samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
+optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
+samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
+optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
+samples_final = Optim.minimizer(optimization) 
+optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
+samples_final = Optim.minimizer(optimization) 
 
-optimization = Optim.optimize(costfunction_o, gradient_direct_exp!, samples_initial, optimizer, options)
-samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
-optimization = Optim.optimize(costfunction_o, gradient_direct_exp!, samples_final, optimizer, options)
-samples_final = Optim.minimizer(optimization)     # FINAL PARAMETERS
-optimization = Optim.optimize(costfunction_o, gradient_direct_exp!, samples_final, optimizer, options)
-samples_final = Optim.minimizer(optimization)     # FINAL PARAMETERS
+# optimization = Optim.optimize(costfunction_o, gradient_direct_exp!, samples_initial, optimizer, options)
+# samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
+# optimization = Optim.optimize(costfunction_o, gradient_direct_exp!, samples_final, optimizer, options)
+# samples_final = Optim.minimizer(optimization)     # FINAL PARAMETERS
+# optimization = Optim.optimize(costfunction_o, gradient_direct_exp!, samples_final, optimizer, options)
+# samples_final = Optim.minimizer(optimization)     # FINAL PARAMETERS
 
 
 
