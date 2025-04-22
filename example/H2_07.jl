@@ -22,15 +22,15 @@ device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
 T=10
-n_samples = 500
+n_samples = 300
 δt = T/n_samples
 
+# carrier_freqs= freqs
+carrier_freqs = [30.207288739056587,30.48828132829821]
 
-carrier_freqs = [30.2,0.30]
-# carrier_freqs = [30.2,0.30,28.18]
-signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
+signals_ = [DigitizedSignal([2*sin(2π* (t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals = MultiChannelSignal(signals_)
-
+samples_matrix=[2*sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
 
 # initial state
 initial_state = "1"^(n_qubits÷2) * "0"^(n_qubits÷2)
@@ -64,7 +64,7 @@ function costfunction(samples)
     samples = reshape(samples, n_samples+1, n_qubits)
     signals_= [DigitizedSignal(samples[:,i], δt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
     signals= MultiChannelSignal(signals_)
-    energy,ϕ = costfunction_ode(ψ_initial, eigvalues, signals, n_qubits, drives, T,Cost_ham,tol_ode=tol_ode)   
+    energy,ϕ = costfunction_ode(ψ_initial, eigvalues, signals, n_qubits, drives,eigvecs,  T,Cost_ham,tol_ode=tol_ode)   
     return energy
 end
 
@@ -87,10 +87,10 @@ function gradient_ode!(Grad, samples)
                             n_qubits,
                             drives,
                             eigvalues,
-                            device_action_independent_t,
+                            eigvecs,
                             Cost_ham,
                             n_samples_grad,
-                            ∂Ω0,
+                            ∂Ω0;
                             tol_ode=tol_ode)
    
     for k in 1:n_qubits
@@ -107,8 +107,8 @@ end
 
 # OPTIMIZATION ALGORITHM
 linesearch = LineSearches.MoreThuente()
-optimizer = Optim.BFGS(linesearch=linesearch)
-# optimizer = Optim.LBFGS(linesearch=linesearch)
+# optimizer = Optim.BFGS(linesearch=linesearch)
+optimizer = Optim.LBFGS(linesearch=linesearch)
 # OPTIMIZATION OPTIONS
 options = Optim.Options(
         show_trace = true,
@@ -118,10 +118,29 @@ options = Optim.Options(
         iterations = 100,
 )
 
-
+Grad = zeros(Float64, n_samples+1, n_qubits)
+grad_initial=gradient_ode!(Grad, samples_initial)
 # INITIAL PARAMETERS
-samples_matrix=[sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
 pulse_windows=range(0, T, length=n_samples+1)
+Ω0=copy(samples_matrix)
+
+pulse_windows=range(0, T, length=n_samples+1)
+Ω_plots = plot(                       
+    [plot(pulse_windows, Ω0[:,q]) for q in 1:n_qubits]...,
+    title = "Initial Signals",
+    legend = false,
+    layout = (n_qubits,1),
+)
+grad_plots=plot(                       
+    [plot(
+            pulse_windows, grad_initial[:,q]
+    ) for q in 1:n_qubits]...,
+    title = "Initial Gradients",
+    legend = false,
+    layout = (n_qubits,1),
+)
+plot(Ω_plots, grad_plots, layout=(1,2))
+savefig("initial_signals_$(n_qubits)_$(n_levels)_$(SYSTEM)_$(n_samples)_$(T)_ode.pdf")
 
 
 samples_initial=reshape(samples_matrix, :)
@@ -162,4 +181,4 @@ pulse_windows=range(0, T, length=n_samples+1)
 )
 plot(Ω_plots, Ω_plots_final, layout=(1,2))
 
-savefig("final_signals_$(n_qubits)_$(n_levels)$(SYSTEM).pdf")
+savefig("final_signals_$(n_qubits)_$(n_levels)$(SYSTEM)_$(n_samples).pdf")

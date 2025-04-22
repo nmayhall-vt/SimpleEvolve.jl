@@ -1,3 +1,4 @@
+using LinearAlgebra
 """
 a_q(n_levels)
 
@@ -105,3 +106,18 @@ function projector(n::Integer, m::Integer, m0::Integer)
     return Π
 end
 
+function transform!(
+    x::Vector{T}, A::AbstractMatrix{<:Number}, _x::Vector{T}
+) where T <: Number
+    x .= mul!(_x, A, x)
+end
+function kron_concat(
+    ops::AbstractVector{Matrix{T}},
+    O_::AbstractVector{Matrix{T}},
+) where T <: Number
+    O_[1] .= ops[1]
+    for q ∈ 2:length(ops)
+        kron!(O_[q], O_[q-1], ops[q])
+    end
+    return O_[end]
+end

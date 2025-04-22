@@ -1,5 +1,7 @@
 module SimpleEvolve
-
+using SciMLSensitivity
+using ReverseDiff
+using ForwardDiff
 
 include("signal.jl")
 include("evolution.jl")
@@ -26,7 +28,10 @@ export gradientsignal_ODE
 export MultiChannelSignal
 export single_trotter_exponentiation_step
 export grad_signal_expansion
-
+export gradientsignal_rotate
+export trotter_evolve
+export costfunction_trotter
+export gradientsignal_rotate_ode
 
 export static_hamiltonian
 export Transmon
@@ -34,5 +39,6 @@ export QubitCoupling
 export choose_qubits
 export validate_and_expand
 export projector
-
+export transform!
+export kron_concat
 end
