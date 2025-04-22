@@ -23,7 +23,7 @@ function energy()
 
 
     T=10
-    n_samples = 1000
+    n_samples = 10000
     δt = T/n_samples
 
 
@@ -89,5 +89,11 @@ function energy()
 
     @time energy3,ψ_t = costfunction_trotter(ψ_initial, eigvalues,eigvecs,signals, n_qubits,n_levels, a,Cost_ham,T;basis="qubitbasis",  n_trotter_steps=n_trotter_steps) 
     println("trotter evolved energy is ",energy3)
+    println("infidelity between the ode and direct exponentiation")
+    display(infidelity(ϕ,ψ_d))
+    println("infidelity between the ode and trotter exponentiation")
+    display(infidelity(ϕ,ψ_t))
+    println("infidelity between the direct and trotter exponentiation")
+    display(infidelity(ψ_d,ψ_t))
 end
 energy()
