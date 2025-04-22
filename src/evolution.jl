@@ -75,9 +75,14 @@ function evolve_ODE(ψ0,
                     drives,
                     eigvalues,
                     eigvectors;
+                    basis = "eigenbasis",
                     tol_ode=1e-8)
 
     # eigvalues, eigvecs = eigen(Hstatic)
+    if basis != "eigenbasis"
+        ψ0 = eigvectors' * ψ0
+    end
+    
     ψ = copy(ψ0)
 
     #evolve the state with ODE
@@ -88,7 +93,9 @@ function evolve_ODE(ψ0,
     ψ   .= sol.u[end]
     #normalize the states
     ψ .= ψ/norm(ψ)
-    return ψ
+    # returning the final state in eigenbasis so during 
+    # computing expectation values we don't have to change basis
+    return ψ 
 
 end
 
@@ -115,10 +122,15 @@ function evolve_direct_exponentiation(ψ0,
                                         n_sites,
                                         drives,
                                         eigvalues,
-                                        eigvectors,
-                                        n_trotter_steps)
+                                        eigvectors;
+                                        basis = "eigenbasis",
+                                        n_trotter_steps=1000)
            
     # eigvalues, eigvecs = eigen(Hstatic)
+    if basis != "eigenbasis"
+        ψ0 = eigvectors' * ψ0
+    end
+    
     ψ = copy(ψ0)
     t_series=range(0,T,n_trotter_steps+1)
     dt= T/n_trotter_steps
@@ -193,6 +205,52 @@ function infidelity(ψ,φ)
     return 1 - abs2(ψ'*φ)
 end
 
+
+function trotter_evolve(ψ0,
+                            T,
+                            signals,
+                            n_sites,
+                            n_levels,
+                            a_q,
+                            eigvalues,
+                            eigvectors;
+                            basis = "eigenbasis",
+                            n_trotter_steps) 
+    # eigvalues, eigvecs = eigen(Hstatic)
+    tmp_ψ = zeros(ComplexF64, length(ψ0))
+    if basis == "eigenbasis" # rotating out of the eigenspace
+        ψ0 .= mul!(tmp_ψ, eigvectors, ψ0)
+    end
+    ψ     = copy(ψ0)
+    t_    = range(0,T,length=n_trotter_steps+1)
+    δt    = T/n_trotter_steps
+
+    # repeated device action
+    V     = eigvectors*Diagonal(exp.((-im*δt ) * eigvalues)) *eigvectors'
+    tmpM_ = [Matrix{ComplexF64}(undef, n_levels,n_levels) for q ∈ 1:n_sites]  
+    tmpK_ = [Matrix{ComplexF64}(undef,  n_levels^q,  n_levels^q) for q ∈ 1:n_sites]
+
+
+    ψ .= _step(ψ, t_[1], δt/2, signals, n_sites, a_q, tmp_ψ, tmpM_, tmpK_)
+    transform!(ψ, V, tmp_ψ)
+    for i ∈ (2:n_trotter_steps)
+        t_i = t_[i]-δt/2
+        ψ .= _step(ψ, t_i, δt, signals, n_sites, a_q, tmp_ψ, tmpM_, tmpK_)
+        transform!(ψ, V, tmp_ψ)                # transform!(σ, V, tmpV)=> σ=mul!(tmpV, V, σ) 
+    end
+    ψ .= _step(ψ, t_[end], δt/2, signals, n_sites, a_q, tmp_ψ, tmpM_, tmpK_)
+    # transform!(ψ, V, tmp_ψ)
+    
+    transform!(ψ, eigvectors',tmp_ψ)           # transform the state to the device space
+    ψ.*=exp.((im*T)*eigvalues)                 # rotate phases for final exp(iHDT)
+    
+    ψ ./= norm(ψ)
+    if basis == "eigenbasis" # rotating back to the eigenspace
+        ψ .= mul!(tmp_ψ, eigvectors, ψ)
+    end
+    return ψ
+end
+
 """ Auxiliary function to evolve a single step in time. """
 function _step(ψ, t, τ, signals,n_qubits, a, tmpV, tmpM_, tmpK_, adjoint=false)
    
@@ -207,44 +265,4 @@ function _step(ψ, t, τ, signals,n_qubits, a, tmpV, tmpM_, tmpK_, adjoint=false
     end
     O = kron_concat(tmpM_, tmpK_)
     return mul!(tmpV, O, ψ)
-end
-
-
-function trotter_evolve(ψ0,
-                            T,
-                            signals,
-                            n_sites,
-                            n_levels,
-                            a_q,
-                            eigvalues,
-                            eigvectors,
-                            n_trotter_steps) 
-
-    # eigvalues, eigvecs = eigen(Hstatic)
-    tmp_ψ = zeros(ComplexF64, length(ψ0))
-    ψ     = copy(ψ0)
-    t_    = range(0,T,length=n_trotter_steps+1)
-    δt    = T/n_trotter_steps
-    V     = eigvectors*Diagonal(exp.((-im*δt ) * eigvalues)) *eigvectors'
-    tmpV  = Vector{ComplexF64}(undef, length(ψ0))
-    tmpM_ = [Matrix{ComplexF64}(undef, n_levels,n_levels) for q ∈ 1:n_sites]  
-    tmpK_ = [Matrix{ComplexF64}(undef,  n_levels^q,  n_levels^q) for q ∈ 1:n_sites]
-
-    # transform!(ψ, eigvectors, tmp_ψ)
-    ψ .= _step(ψ, t_[1], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
-    transform!(ψ, V, tmp_ψ)
-    for i ∈ (2:n_trotter_steps)
-        t_i = t_[i]-δt/2
-        ψ .= _step(ψ, t_i, δt, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
-        transform!(ψ, V, tmp_ψ)                #transform!(σ, V, tmpV)=> σ=mul!(tmpV, V, σ) 
-    end
-    ψ .= _step(ψ, t_[end], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
-    transform!(ψ, V, tmp_ψ)
-    
-    transform!(ψ, eigvectors',tmp_ψ)           # transform the state to the device space
-    ψ.*=exp.((im*T)*eigvalues)                 # rotate phases for final exp(iHDT)
-    transform!(ψ, eigvectors, tmp_ψ)           # transform the state to the eigenspace
-    
-    ψ ./= norm(ψ)
-    return ψ
 end

@@ -23,7 +23,7 @@ device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
 T=10
-n_samples = 400
+n_samples = 1000
 δt = T/n_samples
 
 
@@ -71,7 +71,7 @@ function costfunction_o(samples)
     samples = reshape(samples, n_samples+1, n_qubits)
     signals_= [DigitizedSignal(samples[:,i], δt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
     signals= MultiChannelSignal(signals_)
-    energy,ϕ = costfunction_ode(ψ_initial, eigvalues, signals, n_qubits, drives,eigvecs,  T,Cost_ham,tol_ode=tol_ode)   
+    energy,ϕ = costfunction_ode(ψ_initial, eigvalues, signals, n_qubits, drives,eigvecs,  T,Cost_ham,basis="qubitbasis",tol_ode=tol_ode)   
     return energy
 end
 
@@ -79,7 +79,7 @@ function costfunction_t(samples)
     samples = reshape(samples, n_samples+1, n_qubits)
     signals_= [DigitizedSignal(samples[:,i], δt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
     signals= MultiChannelSignal(signals_)
-    energy,ϕ =costfunction_trotter(ψ_initial, eigvalues,eigvecs,signals, n_qubits,n_levels, a,T,  n_trotter_steps, Cost_ham)  
+    energy,ϕ =costfunction_trotter(ψ_initial, eigvalues,eigvecs,signals, n_qubits,n_levels, a,Cost_ham,T;basis="qubitbasis",  n_trotter_steps=n_trotter_steps )  
     return energy
 end
 
@@ -102,14 +102,13 @@ function gradient_rotate!(Grad, samples)
                             signals,
                             n_qubits,
                             n_levels,
-                            drives,
                             a,
                             eigvalues,
                             eigvecs,
                             Cost_ham,
                             n_samples_grad,
                             ∂Ω0;
-                            tol_ode=tol_ode)
+                            basis="qubitbasis")
 
     for k in 1:n_qubits
         for i in 1:n_samples+1
@@ -135,6 +134,7 @@ function gradient_ode!(Grad, samples)
                             Cost_ham,
                             n_samples_grad,
                             ∂Ω0;
+                            basis="qubitbasis",
                             tol_ode=tol_ode)
     for k in 1:n_qubits
         for i in 1:n_samples+1
@@ -145,17 +145,72 @@ function gradient_ode!(Grad, samples)
     return Grad
 end
 
+function gradient_direct_exp!(Grad, samples)
+    Grad = reshape(Grad, :, n_qubits)
+    samples = reshape(samples, n_samples+1, n_qubits)
+    signals_= [DigitizedSignal(samples[:,i], δt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
+    signals= MultiChannelSignal(signals_)
+    grad_direct =gradientsignal_direct_exponentiation(ψ_initial,
+                            T,
+                            signals,
+                            n_qubits,
+                            drives,
+                            eigvalues,
+                            eigvecs,
+                            n_trotter_steps,
+                            Cost_ham,
+                            n_samples_grad,
+                            ∂Ω0;
+                            basis="qubitbasis")
+    for k in 1:n_qubits
+        for i in 1:n_samples+1
+            # considering the frequency remain as constants
+            Grad[i,k] = grad_direct[i,k] 
+        end
+    end
+    return Grad
+end
 
-@time energy,ϕ = costfunction_ode(ψ_initial, eigvalues, signals, n_qubits, drives,eigvecs, T,Cost_ham,tol_ode=1e-10)   
+function gradient_rotate_ode(Grad, samples)
+    Grad = reshape(Grad, :, n_qubits)
+    samples = reshape(samples, n_samples+1, n_qubits)
+    signals_= [DigitizedSignal(samples[:,i], δt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
+    signals= MultiChannelSignal(signals_)
+    grad_rotate_ode =gradientsignal_rotate_ode(ψ_initial,
+                            T,
+                            signals,
+                            n_qubits,
+                            n_levels,
+                            drives,
+                            a,
+                            eigvalues,
+                            eigvecs,
+                            Cost_ham,
+                            n_samples_grad,
+                            ∂Ω0;
+                            basis="qubitbasis",
+                            tol_ode=tol_ode)
+                            
+    for k in 1:n_qubits
+        for i in 1:n_samples+1
+            # considering the frequency remain as constants
+            Grad[i,k] = grad_rotate_ode[i,k] 
+        end
+    end
+    return Grad
+end
+
+
+@time energy,ϕ = costfunction_ode(ψ_initial, eigvalues, signals, n_qubits, drives,eigvecs, T,Cost_ham;basis="qubitbasis",tol_ode=1e-10)   
 println("ode evolved energy is ",energy)
 
 # trotter direct exponentiation evolution
 n_trotter_steps = n_samples
-@time energy2,ψ_d = costfunction_direct_exponentiation(ψ_initial, eigvalues,eigvecs, signals, n_qubits, drives, T, n_trotter_steps,Cost_ham)
+@time energy2,ψ_d = costfunction_direct_exponentiation(ψ_initial, eigvalues,eigvecs, signals, n_qubits, drives,Cost_ham, T;basis="qubitbasis", n_trotter_steps=n_trotter_steps)
 println("direct evolved energy is ",energy2)
 
 
-@time energy3,ψ_t = costfunction_trotter(ψ_initial, eigvalues,eigvecs,signals, n_qubits,n_levels, a,T,  n_trotter_steps, Cost_ham)
+@time energy3,ψ_t = costfunction_trotter(ψ_initial, eigvalues,eigvecs,signals, n_qubits,n_levels, a,Cost_ham,T;basis="qubitbasis",  n_trotter_steps=n_trotter_steps) 
 println("trotter evolved energy is ",energy3)
 
 
@@ -177,9 +232,14 @@ Grad = zeros(Float64, n_samples+1, n_qubits)
 grad_initial=gradient_ode!(Grad, samples_initial)
 Grad = zeros(Float64, n_samples+1, n_qubits)
 grad_initial__=gradient_rotate!(Grad, samples_initial)
-
+Grad = zeros(Float64, n_samples+1, n_qubits)
+grad_initial_direct=gradient_direct_exp!(Grad, samples_initial)
+Grad = zeros(Float64, n_samples+1, n_qubits)
+grad_rotate_ode=gradient_rotate_ode(Grad, samples_initial)
 # method = "trotter"
-method = "ode"
+# method = "ode"
+# method = "direct"
+method = "rotate_ode"
 Ω0=copy(samples_matrix)
 
 pulse_windows=range(0, T, length=n_samples+1)
@@ -191,7 +251,7 @@ pulse_windows=range(0, T, length=n_samples+1)
 )
 grad_plots=plot(                       
     [plot(
-            pulse_windows, grad_initial[:,q]
+            pulse_windows, grad_rotate_ode[:,q]
     ) for q in 1:n_qubits]...,
     title = "Initial Gradients",
     legend = false,
@@ -204,27 +264,27 @@ savefig("initial_signals_$(n_qubits)_$(n_levels)_$(SYSTEM)_$(n_samples)_$(T)_$(m
 
 samples_initial=reshape(samples_matrix, :)
 Grad = zeros(Float64, n_samples+1, n_qubits)
-optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_initial, optimizer, options)
-samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
-optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_final, optimizer, options)
-samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
-optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_final, optimizer, options)
-samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
-# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
-# samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
-# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
-# samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
-# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
-# samples_final = Optim.minimizer(optimization) 
-# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
-# samples_final = Optim.minimizer(optimization) 
-# error()
-# optimization = Optim.optimize(costfunction, gradient_ode!, samples_initial, optimizer, options)
+# optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_initial, optimizer, options)
 # samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
-# optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
-# samples_final = Optim.minimizer(optimization)     # FINAL PARAMETERS
-# optimization = Optim.optimize(costfunction, gradient_ode!, samples_final, optimizer, options)
-# samples_final = Optim.minimizer(optimization)     # FINAL PARAMETERS
+# optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_final, optimizer, options)
+# samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
+# optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_final, optimizer, options)
+# samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
+# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_initial, optimizer, options)
+# samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
+# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
+# samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
+# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
+# samples_final = Optim.minimizer(optimization) 
+# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
+# samples_final = Optim.minimizer(optimization) 
+
+optimization = Optim.optimize(costfunction_o, gradient_direct_exp!, samples_initial, optimizer, options)
+samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
+optimization = Optim.optimize(costfunction_o, gradient_direct_exp!, samples_final, optimizer, options)
+samples_final = Optim.minimizer(optimization)     # FINAL PARAMETERS
+optimization = Optim.optimize(costfunction_o, gradient_direct_exp!, samples_final, optimizer, options)
+samples_final = Optim.minimizer(optimization)     # FINAL PARAMETERS
 
 
 

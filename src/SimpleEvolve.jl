@@ -31,6 +31,7 @@ export grad_signal_expansion
 export gradientsignal_rotate
 export trotter_evolve
 export costfunction_trotter
+export gradientsignal_rotate_ode
 
 export static_hamiltonian
 export Transmon
