@@ -5,8 +5,8 @@ gradientsignal_ODE(ψ0, T, signals, n_sites, drives, eigvalues, device_action_in
     Function to compute the gradient of the energy 
     with respect to the amplitude of the signal using ODE
     args:
-        ψ0       : Initial state vector
-        T        : Total time for evolution
+        ψ0        : Initial state vector
+        T         : Total time for evolution
         signals   : Signals to be evolved
         n_sites   : Number of sites in the system
         drives    : External drives applied to the system
@@ -41,12 +41,12 @@ function gradientsignal_ODE(ψ0,
     δt    = T/n_signals
     tmp_σ = zeros(ComplexF64, length(ψ0))
     tmp_ψ = zeros(ComplexF64, length(ψ0))
-    repeated_device_action = eigvectors*Diagonal(exp.((-im*δt ) * eigvalues)) *eigvectors'
+    # repeated_device_action = eigvectors*Diagonal(exp.((-im*δt ) * eigvalues)) *eigvectors'
 
     #evolve the sigma state with ODE in forward direction
-    parameters = [signals, n_sites, drives,eigvalues,false]
+    parameters = [signals, n_sites, drives,eigvalues,false, eigvectors]
     prob = ODEProblem(dψdt!, σ, (0.0,T), parameters)
-    sol  = solve(prob, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
+    sol  = solve(prob,alg_hints = [:stiff], abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
     σ .= sol.u[end]
 
     transform!(σ, eigvectors',tmp_σ)           # transform the state to the device space
@@ -60,37 +60,34 @@ function gradientsignal_ODE(ψ0,
     σ .*=exp.((im*T)*eigvalues)                # rotate phases for final exp(iHDT)
     transform!(σ, eigvectors, tmp_σ)           # transform the state to the eigenspace
 
-    parameters = [signals, n_sites, drives,eigvalues,true] #should it be true? 
+    parameters = [signals, n_sites, drives,eigvalues,true,eigvectors] #should it be true? 
     # or the time already taking care of it in solve function, I could not find any solid proof/evidence of it
     prob_ = ODEProblem(dψdt!, σ, (T,0.0), parameters)
-    sol_  = solve(prob_, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
+    sol_  = solve(prob_,alg_hints = [:stiff], abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
     σ .= sol_.u[end]
 
-    
     
     #calculating gradient by evolving both ψ and σ states
     gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,eigvectors,t_[1],1)
     
     # fixed_dt=δt/100
     # parameters = [signals, n_sites, drives, eigvalues,false,fixed_dt] # dψ_dt_grad!
-    parameters = [signals, n_sites, drives, eigvalues,false]
+    parameters = [signals, n_sites, drives, eigvalues,false, eigvectors]
     prob_ψ = ODEProblem(dψdt!, ψ, (0.0,δt/2), parameters)
     # sol_ψ  = solve(prob_ψ,dt=fixed_dt,adaptive=false, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
-    sol_ψ  = solve(prob_ψ, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
+    sol_ψ  = solve(prob_ψ,alg_hints = [:stiff], abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
     ψ .= sol_ψ.u[end]
 
 
     prob_σ = ODEProblem(dψdt!, σ, (0.0, δt/2), parameters)
     # sol_σ  = solve(prob_σ, dt=fixed_dt,adaptive=false,abstol=tol_ode, reltol=tol_ode,save_everystep=false)
-    sol_σ  = solve(prob_σ,abstol=tol_ode, reltol=tol_ode,save_everystep=false)
+    sol_σ  = solve(prob_σ,alg_hints = [:stiff],abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
     σ .= sol_σ.u[end]
 
     #transform!(σ, V, tmpV)=> σ=mul!(tmpV, V, σ) 
-    # transform!(σ, repeated_device_action', tmp_σ)
-    # transform!(ψ, repeated_device_action', tmp_ψ)
-    
-    transform!(σ, eigvectors, tmp_σ )           # transform the state to the eigenspace  #rotating the state to the eigenspace
-    transform!(ψ, eigvectors, tmp_ψ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
+    # already in eigenspace because drives are in eigenspace
+    # transform!(σ, eigvectors, tmp_σ )           # transform the state to the eigenspace  
+    # transform!(ψ, eigvectors, tmp_ψ)            # transform the state to the eigenspace  
 
 
     for i ∈ (2:n_signals)
@@ -100,37 +97,34 @@ function gradientsignal_ODE(ψ0,
         
         # fixed_dt=δt/100
         # parameters = [signals, n_sites, drives, eigvalues,false,fixed_dt] # dψ_dt_grad!
-        parameters = [signals, n_sites, drives, eigvalues,false]
+        parameters = [signals, n_sites, drives, eigvalues,false, eigvectors]
         prob_ψ = ODEProblem(dψdt!, ψ, (t_i, t_f), parameters)
         # sol_ψ = solve(prob_ψ, dt=fixed_dt,adaptive=false,abstol=tol_ode, reltol=tol_ode,save_everystep=false)
-        sol_ψ = solve(prob_ψ,abstol=tol_ode, reltol=tol_ode,save_everystep=false)
+        sol_ψ = solve(prob_ψ,alg_hints = [:stiff],abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
         ψ .= sol_ψ.u[end]
 
         prob_σ = ODEProblem(dψdt!, σ, (t_i, t_f), parameters)
-        sol_σ  = solve(prob_σ, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
+        sol_σ  = solve(prob_σ,alg_hints = [:stiff], abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
         # sol_σ  = solve(prob_σ, dt=fixed_dt,adaptive=false,abstol=tol_ode, reltol=tol_ode,save_everystep=false)
         σ .= sol_σ.u[end]
         
-        transform!(σ, eigvectors, tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
-        transform!(ψ, eigvectors, tmp_ψ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
+        # transform!(σ, eigvectors, tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
+        # transform!(ψ, eigvectors, tmp_ψ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
 
-        
-        # transform!(σ, repeated_device_action', tmp_σ)
-        # transform!(ψ, repeated_device_action', tmp_ψ)
     end
 
     gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,eigvectors,(t_[end]-δt/2),n_signals+1)
     
     # fixed_dt=δt/100
     # parameters = [signals, n_sites, drives, eigvalues,false,fixed_dt] # dψ_dt_grad!
-    parameters = [signals, n_sites, drives, eigvalues,false]
+    parameters = [signals, n_sites, drives, eigvalues,false, eigvectors]
     prob_ψ = ODEProblem(dψdt!, ψ, (T-δt/2, T), parameters)
-    sol_ψ  = solve(prob_ψ, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
+    sol_ψ  = solve(prob_ψ, alg_hints = [:stiff],abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
     # sol_ψ  = solve(prob_ψ, dt=fixed_dt,adaptive=false,abstol=tol_ode, reltol=tol_ode,save_everystep=false)
     ψ .= sol_ψ.u[end]
 
     prob_σ = ODEProblem(dψdt!, σ, (T-δt/2, T), parameters)
-    sol_σ  = solve(prob_σ, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
+    sol_σ  = solve(prob_σ,alg_hints = [:stiff], abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
     # sol_σ  = solve(prob_σ, dt=fixed_dt,adaptive=false,abstol=tol_ode, reltol=tol_ode,save_everystep=false)
     σ .= sol_σ.u[end]
 
@@ -243,13 +237,13 @@ function gradientsignal_direct_exponentiation(ψ0,
 
     # time evolution with direct exponentiation
     σ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, dt/2,t_series[1])
-    transform!(σ, eigvectors, tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
+    # transform!(σ, eigvectors, tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
     for i in 2:n_trotter_steps
         σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, dt,t_series[i])
-        transform!(σ, eigvectors, tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
+        # transform!(σ, eigvectors, tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
     end
     σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, dt/2,t_series[end])
-    transform!(σ, eigvectors, tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
+    # transform!(σ, eigvectors, tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
     
     transform!(σ, eigvectors',tmp_σ)           # transform the state to the device space
     σ .*=exp.((im*T)*eigvalues)               # rotate phases for final exp(iHDT)
@@ -266,37 +260,37 @@ function gradientsignal_direct_exponentiation(ψ0,
 
     #time evolution backward for sigma state
     σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives,eigvalues, dt/2,t_series[end],true)
-    transform!(σ, eigvectors', tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
+    # transform!(σ, eigvectors', tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
     for i in reverse(2:n_trotter_steps)
         σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, dt,t_series[i],true)
-        transform!(σ, eigvectors', tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
+        # transform!(σ, eigvectors', tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
 
     end
     σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, dt/2,t_series[1],true)
-    transform!(σ, eigvectors', tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
+    # transform!(σ, eigvectors', tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
 
     #calculating gradient by evolving both \psi and \sigma states
     gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,eigvectors,t_series[1],1)
-    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, Δt/2,t_series[1])
-    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, Δt/2,t_series[1])
-    transform!(σ, eigvectors, tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
-    transform!(ψ, eigvectors, tmp_ψ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
+    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues,eigvectors, Δt/2,t_series[1])
+    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues,eigvectors, Δt/2,t_series[1])
+    # transform!(σ, eigvectors, tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
+    # transform!(ψ, eigvectors, tmp_ψ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
     for i in 2:n_signals
         gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,eigvectors,t_series[i],i)
-        ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, Δt,t_series[i])
-        σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, Δt,t_series[i])
-        transform!(σ, eigvectors, tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
-        transform!(ψ, eigvectors, tmp_ψ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
+        ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues,eigvectors, Δt,t_series[i])
+        σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues,eigvectors, Δt,t_series[i])
+        # transform!(σ, eigvectors, tmp_σ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
+        # transform!(ψ, eigvectors, tmp_ψ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
     end
     gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,eigvectors,t_series[end],n_signals+1)
-    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, Δt/2,t_series[end])
-    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, Δt/2,t_series[end])
+    σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues,eigvectors, Δt/2,t_series[end])
+    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues,eigvectors, Δt/2,t_series[end])
     return ∂Ω
 
 end
 
 
-function gradientsignal_ODE_rotate(ψ0,
+function gradientsignal_rotate(ψ0,
                             T,
                             signals,
                             n_sites,
@@ -330,14 +324,14 @@ function gradientsignal_ODE_rotate(ψ0,
     # sol  = solve(prob, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
     # σ .= sol.u[end]
 
-    σ .= _step(σ, t_[1], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
+    σ .= single_step(σ, t_[1], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
     transform!(σ, V, tmpV)
     for i ∈ (2:n_signals)
         t_i = t_[i]-δt/2
-        σ .= _step(σ, t_i, δt, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
+        σ .= single_step(σ, t_i, δt, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
         transform!(σ, V, tmpV)                #transform!(σ, V, tmpV)=> σ=mul!(tmpV, V, σ) 
     end
-    σ .= _step(σ, t_[end], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
+    σ .= single_step(σ, t_[end], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
    
 
     transform!(σ, eigvectors',tmpV)           # transform the state to the device space
@@ -356,29 +350,29 @@ function gradientsignal_ODE_rotate(ψ0,
     # sol_  = solve(prob_, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
     # σ .= sol_.u[end]
 
-    σ .= _step(σ, t_[end], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_,true)
+    σ .= single_step(σ, t_[end], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_,true)
     transform!(σ, V', tmpV)
     for i ∈ reverse(2:n_signals)
         t_i = t_[i]-δt/2
-        σ .= _step(σ, t_i, δt, signals, n_sites, a_q, tmpV, tmpM_, tmpK_,true)
+        σ .= single_step(σ, t_i, δt, signals, n_sites, a_q, tmpV, tmpM_, tmpK_,true)
         transform!(σ, V', tmpV)
     end
-    σ .= _step(σ, t_[1], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_,true)
+    σ .= single_step(σ, t_[1], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_,true)
    
     
     #calculating gradient by evolving both \psi and \sigma states
     gradient_eachstep!(∂Ω, 1, σ, ψ, t_[1],δt/2 , signals,
                                 n_sites, a_q,tmpV,tmpM_,tmpK_)
 
-    parameters = [signals, n_sites, drives, eigvalues,false,δt/100]
-    prob_ψ = ODEProblem(dψdt_grad!, ψ, (0.0,δt/2), parameters)
-    sol_ψ  = solve(prob_ψ, dt=δt/100,adaptive=false,abstol=tol_ode, reltol=tol_ode,save_everystep=false)
-    ψ .= sol_ψ.u[end]
-    prob_σ = ODEProblem(dψdt_grad!, σ, (0.0, δt/2), parameters)
-    sol_σ  = solve(prob_σ,dt=δt/100,adaptive=false, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
-    σ .= sol_σ.u[end]
-    transform!(σ, V, tmpV)
-    transform!(ψ, V, tmpV)
+    # parameters = [signals, n_sites, drives, eigvalues,false,δt/100]
+    # prob_ψ = ODEProblem(dψdt_grad!, ψ, (0.0,δt/2), parameters)
+    # sol_ψ  = solve(prob_ψ, dt=δt/100,adaptive=false,abstol=tol_ode, reltol=tol_ode,save_everystep=false)
+    # ψ .= sol_ψ.u[end]
+    # prob_σ = ODEProblem(dψdt_grad!, σ, (0.0, δt/2), parameters)
+    # sol_σ  = solve(prob_σ,dt=δt/100,adaptive=false, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
+    # σ .= sol_σ.u[end]
+    # transform!(σ, V, tmpV)
+    # transform!(ψ, V, tmpV)
 
 
 
@@ -394,10 +388,10 @@ function gradientsignal_ODE_rotate(ψ0,
 
 
 
-    # σ .= _step(σ, t_[1], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
-    # ψ .= _step(ψ, t_[1], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
-    # transform!(σ, V, tmpV)
-    # transform!(ψ, V, tmpV)
+    σ .= single_step(σ, t_[1], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
+    ψ .= single_step(ψ, t_[1], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
+    transform!(σ, V, tmpV)
+    transform!(ψ, V, tmpV)
 
 
     for i ∈ (2:n_signals)
@@ -406,15 +400,15 @@ function gradientsignal_ODE_rotate(ψ0,
         gradient_eachstep!(∂Ω, i, σ, ψ, t_i,δt , signals,
                                 n_sites, a_q,tmpV,tmpM_,tmpK_)
 
-        parameters = [signals, n_sites, drives, eigvalues,false,δt/100]
-        prob_ψ = ODEProblem(dψdt_grad!, ψ, (t_i, t_f), parameters)
-        sol_ψ = solve(prob_ψ,dt=δt/100,adaptive=false, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
-        ψ .= sol_ψ.u[end]
-        prob_σ = ODEProblem(dψdt_grad!, σ, (t_i, t_f), parameters)
-        sol_σ  = solve(prob_σ, dt=δt/100,adaptive=false,abstol=tol_ode, reltol=tol_ode,save_everystep=false)
-        σ .= sol_σ.u[end]
-        transform!(σ, V, tmpV)
-        transform!(ψ, V, tmpV)
+        # parameters = [signals, n_sites, drives, eigvalues,false,δt/100]
+        # prob_ψ = ODEProblem(dψdt_grad!, ψ, (t_i, t_f), parameters)
+        # sol_ψ = solve(prob_ψ,dt=δt/100,adaptive=false, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
+        # ψ .= sol_ψ.u[end]
+        # prob_σ = ODEProblem(dψdt_grad!, σ, (t_i, t_f), parameters)
+        # sol_σ  = solve(prob_σ, dt=δt/100,adaptive=false,abstol=tol_ode, reltol=tol_ode,save_everystep=false)
+        # σ .= sol_σ.u[end]
+        # transform!(σ, V, tmpV)
+        # transform!(ψ, V, tmpV)
 
         # parameters = [signals, n_sites, drives, eigvalues,false]
         # prob_ψ = ODEProblem(dψdt, ψ, (t_i, t_f), parameters)
@@ -427,25 +421,25 @@ function gradientsignal_ODE_rotate(ψ0,
         # transform!(ψ, eigvectors, tmp_ψ)           # transform the state to the eigenspace  #rotating the state to the eigenspace
 
 
-        # σ .= _step(σ, t_i, δt, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
-        # ψ .= _step(ψ, t_i, δt, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
-        # transform!(σ, V, tmpV)
-        # transform!(ψ, V, tmpV)
+        σ .= single_step(σ, t_i, δt, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
+        ψ .= single_step(ψ, t_i, δt, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
+        transform!(σ, V, tmpV)
+        transform!(ψ, V, tmpV)
 
 
     end
     gradient_eachstep!(∂Ω, n_signals+1, σ, ψ, t_[end]-δt/2 ,δt/2 , signals,
                                 n_sites, a_q,tmpV,tmpM_,tmpK_)
                                 
-    parameters = [signals, n_sites, drives, eigvalues,false,δt/100]
-    prob_ψ = ODEProblem(dψdt_grad!, ψ, (T-δt/2, T), parameters)
-    sol_ψ  = solve(prob_ψ, dt=δt/100,adaptive=false,abstol=tol_ode, reltol=tol_ode,save_everystep=false)
-    ψ .= sol_ψ.u[end]
-    prob_σ = ODEProblem(dψdt_grad!, σ, (T-δt/2, T), parameters)
-    sol_σ  = solve(prob_σ, dt=δt/100,adaptive=false,abstol=tol_ode, reltol=tol_ode,save_everystep=false)
-    σ .= sol_σ.u[end]
+    # parameters = [signals, n_sites, drives, eigvalues,false,δt/100]
+    # prob_ψ = ODEProblem(dψdt_grad!, ψ, (T-δt/2, T), parameters)
+    # sol_ψ  = solve(prob_ψ, dt=δt/100,adaptive=false,abstol=tol_ode, reltol=tol_ode,save_everystep=false)
+    # ψ .= sol_ψ.u[end]
+    # prob_σ = ODEProblem(dψdt_grad!, σ, (T-δt/2, T), parameters)
+    # sol_σ  = solve(prob_σ, dt=δt/100,adaptive=false,abstol=tol_ode, reltol=tol_ode,save_everystep=false)
+    # σ .= sol_σ.u[end]
 
-    
+
     # parameters = [signals, n_sites, drives, eigvalues,false]
     # prob_ψ = ODEProblem(dψdt!, ψ, (T-δt/2, T), parameters)
     # sol_ψ  = solve(prob_ψ, abstol=tol_ode, reltol=tol_ode,save_everystep=false)
@@ -455,8 +449,8 @@ function gradientsignal_ODE_rotate(ψ0,
     # σ .= sol_σ.u[end]
 
 
-    # σ .= _step(σ, t_[end], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
-    # ψ .= _step(ψ, t_[end], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
+    σ .= single_step(σ, t_[end], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
+    ψ .= single_step(ψ, t_[end], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
 
     return ∂Ω
 end
@@ -476,8 +470,8 @@ function gradient_eachstep!(∂Ω, i, σ, ψ, t, τ, multi_signal, n_qubits, a, 
         mul!(tmpV, O, ψ)
 
         # CALCULATE GRADIENT
-        σAψ = -im*τ * (σ' * tmpV)       # THE BRAKET ⟨σ|A|ψ⟩
-        # σAψ = -im * (σ' * tmpV) 
+        # σAψ = -im*τ * (σ' * tmpV)       # THE BRAKET ⟨σ|A|ψ⟩
+        σAψ = -im * (σ' * tmpV) 
         ∂Ω[i,q] = σAψ + σAψ'              # THE GRADIENT ⟨σ|A|ψ⟩ + ⟨ψ|A|σ⟩
         tmpM_[q] .= one(a)
     end
@@ -487,7 +481,7 @@ end
 
 
 """ Auxiliary function to evolve a single step in time. """
-function _step(ψ, t, τ, signals,n_qubits, a, tmpV, tmpM_, tmpK_, adjoint=false)
+function single_step(ψ, t, τ, signals,n_qubits, a, tmpV, tmpM_, tmpK_, adjoint=false)
    
     for q ∈ 1:n_qubits
         Ω = amplitude(signals.channels[q], t)

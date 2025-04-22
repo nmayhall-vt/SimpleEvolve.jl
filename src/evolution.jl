@@ -26,21 +26,29 @@ function dψdt!(dψ,ψ,parameters,t)
     drives    = parameters[3]
     eigvalues = parameters[4]
     adjoint   = parameters[5]
+    eigvectors = parameters[6]
 
     dim= length(ψ)
     # println(t)
     H = zeros(ComplexF64, dim, dim)
     device_action = Vector{ComplexF64}(undef, dim)
+    # tmp_ψ = Vector{ComplexF64}(undef, dim)
     for k in 1:n_sites
-        H .+= amplitude(signals.channels[k], t)*exp(im*frequency(signals.channels[k], t)*t).*drives[k]
+        amp = amplitude(signals.channels[k], t)
+        freq = frequency(signals.channels[k], t)
+        term = amp * exp(im*freq*t)
+        H .+= term .* drives[k]
+        # H .+= amplitude(signals.channels[k], t)*exp(im*frequency(signals.channels[k], t)*t).*drives[k]
     end
     H .+= H'
+    
     # constructing interaction picture Hamiltonian
-    device_action .= exp.((-im*t*(-1)^adjoint).*eigvalues)
-    H_interaction = Diagonal(device_action)*H*(Diagonal(device_action))'
+    device_action .= exp.((im*t*(-1)^adjoint) .*eigvalues)                  
+    expD = Diagonal(device_action)                          
+    lmul!(expD, H); rmul!(H, expD') 
 
     # constructing the time derivative or schrodinger equation
-    dψ .= -im*H_interaction*ψ
+    dψ .= -im*H*ψ
 end
 
 """
@@ -65,17 +73,17 @@ function evolve_ODE(ψ0,
                     signals,
                     n_sites,
                     drives,
-                    eigvalues;
+                    eigvalues,
+                    eigvectors;
                     tol_ode=1e-8)
 
     # eigvalues, eigvecs = eigen(Hstatic)
     ψ = copy(ψ0)
 
     #evolve the state with ODE
-    parameters = [signals, n_sites, drives, eigvalues,false]
+    parameters = [signals, n_sites, drives, eigvalues,false, eigvectors]
     prob = ODEProblem(dψdt!, ψ, (0.0,T), parameters)
-    sol = solve(prob, BS3(); reltol=tol_ode, abstol=tol_ode, 
-                sensealg=InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true)))
+    sol = solve(prob, alg_hints = [:stiff]; reltol=tol_ode, abstol=tol_ode,save_everystep=false,maxiters=1e8)
     
     ψ   .= sol.u[end]
     #normalize the states
@@ -107,19 +115,21 @@ function evolve_direct_exponentiation(ψ0,
                                         n_sites,
                                         drives,
                                         eigvalues,
+                                        eigvectors,
                                         n_trotter_steps)
            
     # eigvalues, eigvecs = eigen(Hstatic)
     ψ = copy(ψ0)
     t_series=range(0,T,n_trotter_steps+1)
     dt= T/n_trotter_steps
+    #tmp_ψ = Vector{ComplexF64}(undef, length(ψ0))
     
     # time evolution with direct exponentiation
-    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, dt/2,t_series[1])
+    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues,eigvectors, dt/2,t_series[1])
     for i in 2:n_trotter_steps
-        ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, dt,t_series[i])
+        ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues,eigvectors, dt,t_series[i])
     end
-    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, dt/2,t_series[end])
+    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues,eigvectors, dt/2,t_series[end])
     #normalize the states
     ψ .= ψ/norm(ψ)
     return ψ
@@ -143,24 +153,29 @@ single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, dt, t
 
 """
 
-function single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, dt, t,adjoint=false)
+function single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues,eigvectors, dt, t,adjoint=false)
     
     dim= length(ψ)
     H = zeros(ComplexF64, dim, dim)
     device_action = Vector{ComplexF64}(undef, dim)
+    #tmp_ψ = Vector{ComplexF64}(undef, dim)
     for k in 1:n_sites
-        H .+= amplitude(signals.channels[k], t)*exp(im*frequency(signals.channels[k], t)*t).*drives[k]
+        amp = amplitude(signals.channels[k], t)
+        freq = frequency(signals.channels[k], t)
+        term = amp * exp(im*freq*t)
+        H .+= term .* drives[k]
+        # H .+= amplitude(signals.channels[k], t)*exp(im*frequency(signals.channels[k], t)*t).*drives[k]
     end
     H .+= H'
     # constructing interaction picture Hamiltonian
-    device_action .= exp.((-im*t).*eigvalues)
-    H_interaction = Diagonal(device_action)*H*(Diagonal(device_action))'
-
+    device_action .= exp.((im*t) .*eigvalues)                  
+    expD = Diagonal(device_action)                          
+    lmul!(expD, H); rmul!(H, expD') 
     # prepare time evolution operator for the trotter step
-    H_interaction .= exp((-im*dt*(-1)^adjoint).*H_interaction)
-    #
+    H .= exp((-im*dt*(-1)^adjoint).*H)
+    
     #apply the time evolution operator
-    mul!(device_action, H_interaction, ψ)
+    mul!(device_action, H, ψ)
     return device_action
 end
 
@@ -176,4 +191,60 @@ infidelity(ψ, φ)
 """
 function infidelity(ψ,φ)
     return 1 - abs2(ψ'*φ)
+end
+
+""" Auxiliary function to evolve a single step in time. """
+function _step(ψ, t, τ, signals,n_qubits, a, tmpV, tmpM_, tmpK_, adjoint=false)
+   
+    for q ∈ 1:n_qubits
+        Ω = amplitude(signals.channels[q], t)
+        ν = frequency(signals.channels[q], t)
+        z = Ω * exp(im*ν*t)
+        tmpM_[q] .= z .* a  
+
+        # construct the time evolution operator
+        tmpM_[q] .= exp(( ((-1)^adjoint)* -im*τ) .* Hermitian(tmpM_[q]))
+    end
+    O = kron_concat(tmpM_, tmpK_)
+    return mul!(tmpV, O, ψ)
+end
+
+
+function trotter_evolve(ψ0,
+                            T,
+                            signals,
+                            n_sites,
+                            n_levels,
+                            a_q,
+                            eigvalues,
+                            eigvectors,
+                            n_trotter_steps) 
+
+    # eigvalues, eigvecs = eigen(Hstatic)
+    tmp_ψ = zeros(ComplexF64, length(ψ0))
+    ψ     = copy(ψ0)
+    t_    = range(0,T,length=n_trotter_steps+1)
+    δt    = T/n_trotter_steps
+    V     = eigvectors*Diagonal(exp.((-im*δt ) * eigvalues)) *eigvectors'
+    tmpV  = Vector{ComplexF64}(undef, length(ψ0))
+    tmpM_ = [Matrix{ComplexF64}(undef, n_levels,n_levels) for q ∈ 1:n_sites]  
+    tmpK_ = [Matrix{ComplexF64}(undef,  n_levels^q,  n_levels^q) for q ∈ 1:n_sites]
+
+    # transform!(ψ, eigvectors, tmp_ψ)
+    ψ .= _step(ψ, t_[1], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
+    transform!(ψ, V, tmp_ψ)
+    for i ∈ (2:n_trotter_steps)
+        t_i = t_[i]-δt/2
+        ψ .= _step(ψ, t_i, δt, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
+        transform!(ψ, V, tmp_ψ)                #transform!(σ, V, tmpV)=> σ=mul!(tmpV, V, σ) 
+    end
+    ψ .= _step(ψ, t_[end], δt/2, signals, n_sites, a_q, tmpV, tmpM_, tmpK_)
+    transform!(ψ, V, tmp_ψ)
+    
+    transform!(ψ, eigvectors',tmp_ψ)           # transform the state to the device space
+    ψ.*=exp.((im*T)*eigvalues)                 # rotate phases for final exp(iHDT)
+    transform!(ψ, eigvectors, tmp_ψ)           # transform the state to the eigenspace
+    
+    ψ ./= norm(ψ)
+    return ψ
 end

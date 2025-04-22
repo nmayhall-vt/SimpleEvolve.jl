@@ -25,9 +25,7 @@ function costfunction_ode(ψ0,
                          T, 
                          Cost_ham;
                          tol_ode=1e-8)
-    tmp_ψ = zeros(ComplexF64, length(ψ0))
-    ψ_ode = evolve_ODE(ψ0, T, signal, n_sites, drives,eigvals,tol_ode=tol_ode)
-    transform!(ψ_ode, eigvectors, tmp_ψ)           # transform the state to the eigenspace
+    ψ_ode = evolve_ODE(ψ0, T, signal, n_sites, drives,eigvals,eigvectors,tol_ode=tol_ode)
     return real(ψ_ode'*Cost_ham*ψ_ode),  ψ_ode
 end
 """
@@ -58,6 +56,7 @@ costfunction_direct_exponentiation(ψ0,
 """
 function costfunction_direct_exponentiation(ψ0, 
                                             eigvals,
+                                            eigvectors,
                                             signal, 
                                             n_sites, 
                                             drives, 
@@ -65,8 +64,19 @@ function costfunction_direct_exponentiation(ψ0,
                                             n_trotter_steps, 
                                             Cost_ham)
 
-    ψ_direct = evolve_direct_exponentiation(ψ0, T, signal, n_sites, drives, eigvals, n_trotter_steps)
-    tmp_ψ = zeros(ComplexF64, length(ψ0))
-    transform!(ψ_direct, eigvectors, tmp_ψ)           # transform the state to the eigenspace
+    ψ_direct = evolve_direct_exponentiation(ψ0, T, signal, n_sites, drives, eigvals,eigvectors, n_trotter_steps)
     return real(ψ_direct'*Cost_ham*ψ_direct), ψ_direct
+end
+function costfunction_trotter(ψ0, 
+                            eigvalues,
+                            eigvectors,
+                            signals, 
+                            n_sites,
+                            n_levels, 
+                            a_q,
+                            T,  
+                            n_trotter_steps, 
+                            Cost_ham)
+    ψ_trotter= trotter_evolve(ψ0,T,signals,n_sites,n_levels,a_q,eigvalues,eigvectors,n_trotter_steps)
+    return real(ψ_trotter'*Cost_ham*ψ_trotter), ψ_trotter
 end

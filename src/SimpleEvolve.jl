@@ -28,7 +28,9 @@ export gradientsignal_ODE
 export MultiChannelSignal
 export single_trotter_exponentiation_step
 export grad_signal_expansion
-export gradientsignal_ODE_rotate
+export gradientsignal_rotate
+export trotter_evolve
+export costfunction_trotter
 
 export static_hamiltonian
 export Transmon
