@@ -23,7 +23,7 @@ function energy()
 
 
     T=10
-    n_samples = 10000
+    n_samples = 1000
     δt = T/n_samples
 
 

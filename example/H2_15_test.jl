@@ -6,6 +6,7 @@ using Optim
 using LineSearches
 using ForwardDiff
 using ForwardDiff: GradientConfig, Chunk
+using Random
 
 Cost_ham = npzread("h215.npy") 
 display(Cost_ham)
@@ -23,7 +24,7 @@ device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
 T=10
-n_samples = 400
+n_samples = 500
 δt = T/n_samples
 t_=collect(0:δt:T)
 # for i in 1:n_samples+1
@@ -31,24 +32,44 @@ t_=collect(0:δt:T)
 # end
 
 # INITIAL PARAMETERS
-# samples_matrix=[2π*0.02*sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
+# samples_matrix=[2π*sin(4π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
 samples_matrix=[sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
 pulse_windows=range(0, T, length=n_samples+1)
 
 samples_initial=reshape(samples_matrix, :)
 # carrier_freqs = freqs
-carrier_freqs = [30.207288739056587,30.48828132829821]
-
-# signals_ = [DigitizedSignal([2π*0.02* sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
+# carrier_freqs = [30.207288739056587,30.48828132829821]
+carrier_freqs = [22.728727738461984,26.20275686353819]
+# signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals = MultiChannelSignal(signals_)
 
 
+# using NPZ
+# amp0=npzread("./pulses0_amp.npy")
+# sample_matrix=amp0
+# amp_vec= reshape(samples_matrix, :)
+# pulse_windows=range(0, T, length=n_samples+1)
+# samples_initial=amp_vec
+# # Build MultiChannelSignal
+# channels = [
+#     DigitizedSignal(
+#         sample_matrix[1:n_samples+1, i],  # Amplitude samples for channel i
+#         δt,
+#         carrier_freqs[i],   # Carrier frequency for channel i
+#     ) for i in 1:n_qubits
+# ]
+# multi_signal = MultiChannelSignal(channels)
+
+
 # initial state
 initial_state = "1"^(n_qubits÷2) * "0"^(n_qubits÷2)
-ψ_initial = zeros(ComplexF64, n_levels^n_qubits)  
-ψ_initial[1 + parse(Int, initial_state, base=n_levels)] = one(ComplexF64) 
+ψ_initial_ = zeros(ComplexF64, n_levels^n_qubits)  
+ψ_initial_[1 + parse(Int, initial_state, base=n_levels)] = one(ComplexF64) 
 
+@time energy1,ϕ = costfunction_ode(ψ_initial_, eigvalues, signals, n_qubits, drives,eigvecs, T,Cost_ham;basis="qubitbasis",tol_ode=1e-10)   
+# ψ_initial=copy(ϕ)
+ψ_initial=copy(ψ_initial_)
 
 H_static = static_hamiltonian(device, n_levels)
 #eigenvalues and eigenvectors of the static Hamiltonian
@@ -100,7 +121,7 @@ function gradient_rotate!(Grad, samples)
     samples = reshape(samples, n_samples+1, n_qubits)
     signals_= [DigitizedSignal(samples[:,i], δt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
     signals= MultiChannelSignal(signals_)
-    grad_ode,ψ_rotate, σ_rotate =gradientsignal_rotate(ψ_initial,
+    grad_ode,ψ_rotate, σ_rotate =SimpleEvolve.gradientsignal_rotate(ψ_initial,
                             T,
                             signals,
                             n_qubits,
@@ -128,7 +149,7 @@ function gradient_ode!(Grad, samples)
     samples = reshape(samples, n_samples+1, n_qubits)
     signals_= [DigitizedSignal(samples[:,i], δt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
     signals= MultiChannelSignal(signals_)
-    grad_ode,ψ_ode, σ_ode =gradientsignal_ODE(ψ_initial,
+    grad_ode,ψ_ode, σ_ode =SimpleEvolve.gradientsignal_ODE(ψ_initial,
                             T,
                             signals,
                             n_qubits,
@@ -217,8 +238,8 @@ println("trotter evolved energy is ",energy3)
 
 # OPTIMIZATION ALGORITHM
 linesearch = LineSearches.MoreThuente()
-# optimizer = Optim.BFGS(linesearch=linesearch)
-optimizer = Optim.LBFGS(linesearch=linesearch)
+optimizer = Optim.BFGS(linesearch=linesearch)
+# optimizer = Optim.LBFGS(linesearch=linesearch)
 # OPTIMIZATION OPTIONS
 options = Optim.Options(
         show_trace = true,
@@ -282,26 +303,29 @@ savefig("initial_signals_$(n_qubits)_$(n_levels)_$(SYSTEM)_$(n_samples)_$(T)_$(m
 
 samples_initial=reshape(samples_matrix, :)
 Grad = zeros(Float64, n_samples+1, n_qubits)
-optimization = Optim.optimize(costfunction_o, gradient_fd!, samples_initial, optimizer, options)
-samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
-optimization = Optim.optimize(costfunction_o, gradient_fd!, samples_final, optimizer, options)
-samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
-optimization = Optim.optimize(costfunction_o, gradient_fd!, samples_final, optimizer, options)
+# optimization = Optim.optimize(costfunction_o, gradient_fd!, samples_initial, optimizer, options)
+# samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
+# optimization = Optim.optimize(costfunction_o, gradient_fd!, samples_final, optimizer, options)
+# samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
+# optimization = Optim.optimize(costfunction_o, gradient_fd!, samples_final, optimizer, options)
+# samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
+
+optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_initial, optimizer, options)
 samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
-optimization = Optim.optimize(costfunction_o, gradient_fd!, samples_initial, optimizer, options)
+optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_final, optimizer, options)
 samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
-optimization = Optim.optimize(costfunction_o, gradient_fd!, samples_final, optimizer, options)
-samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
-optimization = Optim.optimize(costfunction_o, gradient_fd!, samples_final, optimizer, options)
+optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_final, optimizer, options)
 samples_final = Optim.minimizer(optimization) 
-optimization = Optim.optimize(costfunction_o, gradient_fd!, samples_final, optimizer, options)
+optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_final, optimizer, options)
+samples_final = Optim.minimizer(optimization)
+
+
+optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_initial, optimizer, options)
 samples_final = Optim.minimizer(optimization) 
-# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
-# samples_final = Optim.minimizer(optimization) 
-# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
-# samples_final = Optim.minimizer(optimization) 
-# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
-# samples_final = Optim.minimizer(optimization) 
+optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
+samples_final = Optim.minimizer(optimization) 
+optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
+samples_final = Optim.minimizer(optimization) 
 
 # optimization = Optim.optimize(costfunction_o, gradient_direct_exp!, samples_initial, optimizer, options)
 # samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS

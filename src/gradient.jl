@@ -32,7 +32,9 @@ function gradientsignal_ODE(ψ0,
                             n_signals,
                             ∂Ω=Matrix{Float64}(undef,n_signals+1,n_sites);
                             basis = "eigenbasis",
-                            tol_ode=1e-8) 
+                            tol_ode=1e-8,
+                            n_trotter_steps=2000,
+                            n_levels=2) 
 
     # eigvalues, eigvecs = eigen(Hstatic)
     tmp_σ = zeros(ComplexF64, length(ψ0))
@@ -42,10 +44,16 @@ function gradientsignal_ODE(ψ0,
     ψ     = copy(ψ0)
     σ     = copy(ψ0)
     t_    = range(0,T,length=n_signals+1)
+    t_series=range(0,T,length=n_trotter_steps+1)
     δt    = T/n_signals
+    dt= T/n_trotter_steps
     tmp_σ = zeros(ComplexF64, length(ψ0))
     tmp_ψ = zeros(ComplexF64, length(ψ0))
+    V= eigvectors*Diagonal(exp.((-im*dt ) * eigvalues)) *eigvectors'
     # repeated_device_action = eigvectors*Diagonal(exp.((-im*δt ) * eigvalues)) *eigvectors'
+    tmpM_ = [Matrix{ComplexF64}(undef, n_levels,n_levels) for q ∈ 1:n_sites]  
+    tmpK_ = [Matrix{ComplexF64}(undef,  n_levels^q,  n_levels^q) for q ∈ 1:n_sites]
+    a= a_q(n_levels)
 
     #evolve the sigma state with ODE in forward direction
     parameters = [signals, n_sites, drives,eigvalues,false, eigvectors]
@@ -53,7 +61,7 @@ function gradientsignal_ODE(ψ0,
     sol  = solve(prob, abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
     σ .= sol.u[end]
     σ .= σ /norm(σ)
-    σ .*=exp.((im*T)*eigvalues)                # rotate phases for final exp(iHDT)
+    # σ .*=exp.((im*T)*eigvalues)                # rotate phases for final exp(iHDT)
 
     # if cost_Hamiltonian is in eigenbasis comment out next line
     transform!(σ, eigvectors,tmp_σ)            # transform the state to the qubitbasis
@@ -63,13 +71,26 @@ function gradientsignal_ODE(ψ0,
     transform!(σ,eigvectors',tmp_σ)            # transform the state to the eigenbasis
     σ .*=exp.((-im*T)*eigvalues)               # rotate phases for final exp(iHDT)
 
-    parameters = [signals, n_sites, drives,eigvalues,true,eigvectors] #should it be true? 
-    # or the time already taking care of it in solve function, I could not find any solid proof/evidence of it
-    prob_ = ODEProblem(dψdt!, σ, (T,0.0), parameters)
-    sol_  = solve(prob_,alg_hints = [:stiff], abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
-    σ .= sol_.u[end]
-    σ .= σ /norm(σ)
+    # parameters = [signals, n_sites, drives,eigvalues,true,eigvectors] #should it be true? 
+    # # or the time already taking care of it in solve function, I could not find any solid proof/evidence of it
+    # prob_ = ODEProblem(dψdt!, σ, (T,0.0), parameters)
+    # sol_  = solve(prob_,alg_hints = [:stiff], abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
+    # σ .= sol_.u[end]
+    # σ .= σ /norm(σ)
 
+    transform!(σ, eigvectors, tmp_σ)          # transform the state to the qubitspace
+    σ .= single_step(σ, t_series[end], dt/2, signals, n_sites, a, tmp_σ, tmpM_, tmpK_,true)
+    transform!(σ, V', tmp_σ)
+    for i ∈ reverse(2:n_trotter_steps)
+        t_i = t_series[i]
+        σ .= single_step(σ, t_i, dt, signals, n_sites, a, tmp_σ, tmpM_, tmpK_,true)
+        transform!(σ, V', tmp_σ)
+    end
+    σ .= single_step(σ, t_series[1], dt/2, signals, n_sites, a, tmp_σ, tmpM_, tmpK_,true)
+    σ .= σ /norm(σ)
+    transform!(σ, eigvectors', tmp_σ)
+
+    
     for i ∈ (1:n_signals)
 
         t_i = t_[i]
@@ -96,8 +117,12 @@ function gradientsignal_ODE(ψ0,
     return ∂Ω , ψ, σ
 end
 
+"""
+Pass the evolved wavefunction so that we can apply the cost Hamiltonian
+without doing backward evolution
 
-function gradientsignal_ODE_new(ψ0,
+"""
+function gradientsignal_ODE_alternative(ψ0,
                             T,
                             signals,
                             n_sites,
@@ -115,7 +140,7 @@ function gradientsignal_ODE_new(ψ0,
     if basis != "eigenbasis"
         ψ0 = eigvectors' * ψ0
     end
-    ψ_     = copy(ψ0)
+    ψ     = copy(ψ0)
     σ     = copy(ψ0)
     t_    = range(0,T,length=n_signals+1)
     δt    = T/n_signals
@@ -123,42 +148,23 @@ function gradientsignal_ODE_new(ψ0,
     tmp_ψ = zeros(ComplexF64, length(ψ0))
     # repeated_device_action = eigvectors*Diagonal(exp.((-im*δt ) * eigvalues)) *eigvectors'
 
-    #evolve the sigma state with ODE in forward direction
-    parameters = [signals, n_sites, drives,eigvalues,false, eigvectors]
-    prob = ODEProblem(dψdt!, σ, (0.0,T), parameters)
-    sol  = solve(prob, abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
-    σ .= sol.u[end]
-
-    σ .*=exp.((im*T)*eigvalues)                # rotate phases for final exp(iHDT)
-
-    # if cost_Hamiltonian is in eigenbasis comment out next line
     transform!(σ, eigvectors,tmp_σ)            # transform the state to the qubitbasis
-    σ .= mul!(tmp_σ,cost_ham,σ)                # calculate C|ψ⟩    
-    
-    # # reverse time evolution of the sigma state
-    transform!(σ,eigvectors',tmp_σ)            # transform the state to the eigenbasis
-    σ .*=exp.((-im*T)*eigvalues)                # rotate phases for final exp(iHDT)
-
-    parameters = [signals, n_sites, drives,eigvalues,true,eigvectors] #should it be true? 
-    # or the time already taking care of it in solve function, I could not find any solid proof/evidence of it
-    prob_ = ODEProblem(dψdt!, σ, (T,0.0), parameters)
-    sol_  = solve(prob_,alg_hints = [:stiff], abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
-    σ .= sol_.u[end]
+    σ .= mul!(tmp_σ,cost_ham,σ) 
+    transform!(σ,eigvectors',tmp_σ)   
 
     
     #calculating gradient by evolving both ψ and σ states
     gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,eigvectors,t_[1],1)
-    σ_ = copy(σ)
-    
 
     for i ∈ (1:n_signals)
+        t_i = t_[i]
         t_f = t_[i]+δt
         parameters = [signals, n_sites, drives, eigvalues,false, eigvectors]
-        prob_ψ = ODEProblem(dψdt!, ψ_, (0.0, t_f), parameters)
+        prob_ψ = ODEProblem(dψdt!, ψ, (t_i, t_f), parameters)
         sol_ψ = solve(prob_ψ,abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
         ψ .= sol_ψ.u[end]
 
-        prob_σ = ODEProblem(dψdt!, σ_, (0.0, t_f), parameters)
+        prob_σ = ODEProblem(dψdt!, σ, (t_i, t_f), parameters)
         sol_σ  = solve(prob_σ,alg_hints = [:stiff], abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
         σ .= sol_σ.u[end]
 
@@ -225,8 +231,8 @@ function gradient_eachtimestep!(∂Ω,
         
         AΨ = dH_dΩ * ψ0
         # calculate gradient ⟨σ|A|ψ⟩
-        # σAψ = -im * (σ0' * AΨ)
-        σAψ = -im * (σ' * AΨ)*    multi_signal.channels[k].δt  
+        σAψ = -im * (σ0' * AΨ)
+        # σAψ = -im * (σ' * AΨ)*    multi_signal.channels[k].δt  
 
         # ⟨σ|A|ψ⟩ + ⟨ψ|A|σ⟩ 
         ∂Ω[time_index,k] = σAψ + σAψ'                      
@@ -356,14 +362,14 @@ function gradientsignal_rotate(ψ0,
     tmpK_ = [Matrix{ComplexF64}(undef,  n_levels^q,  n_levels^q) for q ∈ 1:n_sites]
 
 
-    σ .= single_step(σ, t_[1], Δt/2, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_)
+    σ .= single_step(σ, t_series[1], Δt/2, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_)
     transform!(σ, V, tmp_σ)
     for i ∈ (2:n_trotter_steps)
         t_i = t_series[i]
         σ .= single_step(σ, t_i, Δt, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_)
         transform!(σ, V, tmp_σ)                #transform!(σ, V, tmpV)=> σ=mul!(tmpV, V, σ) 
     end
-    σ .= single_step(σ, t_[end], Δt/2, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_)
+    σ .= single_step(σ, t_series[end], Δt/2, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_)
     σ .= σ /norm(σ)
     transform!(σ, eigvectors',tmp_σ)          # transform the state to the eigen space
     σ .*=exp.((im*T)*eigvalues)               # rotate phases for final exp(iHDT)
@@ -377,15 +383,16 @@ function gradientsignal_rotate(ψ0,
     transform!(σ, eigvectors, tmp_σ)          # transform the state to the qubitspace
     
 
-    σ .= single_step(σ, t_[end], Δt/2, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_,true)
+    σ .= single_step(σ, t_series[end], Δt/2, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_,true)
     transform!(σ, V', tmp_σ)
     for i ∈ reverse(2:n_trotter_steps)
         t_i = t_series[i]
         σ .= single_step(σ, t_i, Δt, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_,true)
         transform!(σ, V', tmp_σ)
     end
-    σ .= single_step(σ, t_[1], Δt/2, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_,true)
+    σ .= single_step(σ, t_series[1], Δt/2, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_,true)
     σ .= σ /norm(σ)
+
     #calculating gradient by evolving both ψ and σ states
     gradient_eachstep!(∂Ω, 1, σ, ψ, t_[1],δt/2 , signals,
                                 n_sites, a_q,tmp_σ,tmpM_,tmpK_)
@@ -426,6 +433,82 @@ function gradientsignal_rotate(ψ0,
     end
     return ∂Ω,ψ,σ
 end
+"""
+Pass the evolved wavefunction so that we can apply the cost Hamiltonian
+without doing backward evolution
+
+"""
+
+function gradientsignal_rotate_alternate(ψ0,
+                            T,
+                            signals,
+                            n_sites,
+                            n_levels,
+                            a_q,
+                            eigvalues,
+                            eigvectors,
+                            cost_ham,
+                            n_signals,
+                            ∂Ω=Matrix{Float64}(undef,n_signals+1,n_sites);
+                            n_trotter_steps=1000,
+                            basis = "eigenbasis") 
+    ## transform!(σ, V, tmpV)=> σ=mul!(tmpV, V, σ) 
+    # eigvalues, eigvecs = eigen(Hstatic)
+    tmp_σ = zeros(ComplexF64, length(ψ0))
+    if basis == "eigenbasis" # rotating out of the eigenspace 
+        mul!(tmp_σ, eigvectors, ψ0)
+    end
+    tmp_ψ = zeros(ComplexF64, length(ψ0))
+    tmp_V = zeros(ComplexF64, length(ψ0))
+    ψ     = copy(ψ0)
+    σ     = copy(ψ0)
+    t_    = range(0,T,length=n_signals+1)
+    δt    = T/n_signals
+    Δt    = T/n_trotter_steps
+    V     = eigvectors*Diagonal(exp.((-im*δt ) * eigvalues)) *eigvectors'
+    tmpM_ = [Matrix{ComplexF64}(undef, n_levels,n_levels) for q ∈ 1:n_sites]  
+    tmpK_ = [Matrix{ComplexF64}(undef,  n_levels^q,  n_levels^q) for q ∈ 1:n_sites]
+    
+    σ .= mul!(tmp_σ,cost_ham,σ)
+    
+    #calculating gradient by evolving both ψ and σ states
+    gradient_eachstep!(∂Ω, 1, σ, ψ, t_[1],δt/2 , signals,
+                                n_sites, a_q,tmp_V,tmpM_,tmpK_)
+
+
+    σ .= single_step(σ, t_[1], δt/2, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_)
+    ψ .= single_step(ψ, t_[1], δt/2, signals, n_sites, a_q, tmp_ψ, tmpM_, tmpK_)
+    transform!(σ, V, tmp_σ)
+    transform!(ψ, V, tmp_ψ)
+
+
+    for i ∈ (2:n_signals)
+        t_i = t_[i]
+        gradient_eachstep!(∂Ω, i, σ, ψ, t_i,δt , signals,
+                                n_sites, a_q,tmp_V,tmpM_,tmpK_)
+        σ .= single_step(σ, t_i, δt, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_)
+        ψ .= single_step(ψ, t_i, δt, signals, n_sites, a_q, tmp_ψ, tmpM_, tmpK_)
+        transform!(σ, V, tmp_σ)
+        transform!(ψ, V, tmp_ψ)
+    end
+    gradient_eachstep!(∂Ω, n_signals+1, σ, ψ, t_[end] ,δt/2 , signals,
+                                n_sites, a_q,tmp_V,tmpM_,tmpK_)
+    σ .= single_step(σ, t_[end], δt/2, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_)
+    ψ .= single_step(ψ, t_[end], δt/2, signals, n_sites, a_q, tmp_ψ, tmpM_, tmpK_)
+    
+    transform!(ψ, eigvectors',tmp_ψ)           # transform the state to the device space
+    transform!(σ, eigvectors',tmp_σ)
+    ψ .*=exp.((im*T)*eigvalues)                 # rotate phases for final exp(iHDT)
+    σ .*=exp.((im*T)*eigvalues)
+    
+    ψ ./= norm(ψ)
+    σ ./= norm(σ)
+    if basis != "eigenbasis" # rotating out of the eigenspace
+        ψ .= mul!(tmp_ψ, eigvectors, ψ)
+        σ .= mul!(tmp_σ, eigvectors, σ)
+    end
+    return ∂Ω,ψ,σ
+end
 
 
 
@@ -444,8 +527,8 @@ function gradient_eachstep!(∂Ω, i, σ, ψ, t, τ, multi_signal, n_qubits, a, 
         mul!(tmpV, O, ψ0)
 
         # CALCULATE GRADIENT
-        σAψ = -im*τ * (σ0' * tmpV)       # THE BRAKET ⟨σ|A|ψ⟩
-        # σAψ = -im * (σ0' * tmpV) 
+        # σAψ = -im*τ * (σ0' * tmpV)       # THE BRAKET ⟨σ|A|ψ⟩
+        σAψ = -im * (σ0' * tmpV) 
         ∂Ω[i,q] = σAψ + σAψ'              # THE GRADIENT ⟨σ|A|ψ⟩ + ⟨ψ|A|σ⟩
         tmpM_[q] .= one(a)
     end

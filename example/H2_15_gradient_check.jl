@@ -23,7 +23,7 @@ device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
 T=10
-n_samples = 4000
+n_samples = 1000
 δt = T/n_samples
 t_=collect(0:δt:T)
 # for i in 1:n_samples+1
@@ -37,8 +37,8 @@ pulse_windows=range(0, T, length=n_samples+1)
 
 samples_initial=reshape(samples_matrix, :)
 # carrier_freqs = freqs
-carrier_freqs = [30.207288739056587,30.48828132829821]
-
+# carrier_freqs = [30.207288739056587,30.48828132829821]
+carrier_freqs = [22.728727738461984,26.20275686353819]
 # signals_ = [DigitizedSignal([2π*0.02* sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals = MultiChannelSignal(signals_)
@@ -46,9 +46,10 @@ signals = MultiChannelSignal(signals_)
 
 # initial state
 initial_state = "1"^(n_qubits÷2) * "0"^(n_qubits÷2)
-ψ_initial = zeros(ComplexF64, n_levels^n_qubits)  
-ψ_initial[1 + parse(Int, initial_state, base=n_levels)] = one(ComplexF64) 
-
+ψ_initial_ = zeros(ComplexF64, n_levels^n_qubits)  
+ψ_initial_[1 + parse(Int, initial_state, base=n_levels)] = one(ComplexF64) 
+@time energy1,ϕ = costfunction_ode(ψ_initial_, eigvalues, signals, n_qubits, drives,eigvecs, T,Cost_ham;basis="qubitbasis",tol_ode=1e-10)   
+ψ_initial=copy(ϕ)
 
 H_static = static_hamiltonian(device, n_levels)
 #eigenvalues and eigenvectors of the static Hamiltonian
@@ -95,12 +96,12 @@ n_samples_grad = n_samples
 a=a_q(n_levels)
 tol_ode=1e-10
 
-function gradient_rotate!(Grad, samples)
+function gradient_rotate_alternate!(Grad, samples)
     Grad = reshape(Grad, :, n_qubits)
     samples = reshape(samples, n_samples+1, n_qubits)
     signals_= [DigitizedSignal(samples[:,i], δt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
     signals= MultiChannelSignal(signals_)
-    grad_ode,ψ_rotate, σ_rotate =gradientsignal_rotate(ψ_initial,
+    grad_ode,ψ_rotate, σ_rotate =SimpleEvolve.gradientsignal_rotate_alternate(ψ_initial,
                             T,
                             signals,
                             n_qubits,
@@ -122,7 +123,33 @@ function gradient_rotate!(Grad, samples)
     end
     return Grad, ψ_rotate, σ_rotate
 end
+function gradient_rotate!(Grad, samples)
+    Grad = reshape(Grad, :, n_qubits)
+    samples = reshape(samples, n_samples+1, n_qubits)
+    signals_= [DigitizedSignal(samples[:,i], δt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
+    signals= MultiChannelSignal(signals_)
+    grad_ode,ψ_rot, σ_rot =gradientsignal_rotate(ψ_initial,
+                            T,
+                            signals,
+                            n_qubits,
+                            n_levels,
+                            a,
+                            eigvalues,
+                            eigvecs,
+                            Cost_ham,
+                            n_samples_grad,
+                            ∂Ω0;
+                            basis="qubitbasis",
+                            n_trotter_steps=n_trotter_steps)
 
+    for k in 1:n_qubits
+        for i in 1:n_samples+1
+            # considering the frequency remain as constants
+            Grad[i,k] = grad_ode[i,k] 
+        end
+    end
+    return Grad, ψ_rot, σ_rot
+end
 function gradient_ode!(Grad, samples)
     Grad = reshape(Grad, :, n_qubits)
     samples = reshape(samples, n_samples+1, n_qubits)
@@ -148,12 +175,12 @@ function gradient_ode!(Grad, samples)
     end
     return Grad, ψ_ode, σ_ode
 end
-function gradient_ode_new!(Grad, samples)
+function gradient_ode_alternate!(Grad, samples)
     Grad = reshape(Grad, :, n_qubits)
     samples = reshape(samples, n_samples+1, n_qubits)
     signals_= [DigitizedSignal(samples[:,i], δt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
     signals= MultiChannelSignal(signals_)
-    grad_ode, ψ_ode_new, σ_ode_new =gradientsignal_ODE_new(ψ_initial,
+    grad_ode, ψ_ode_new, σ_ode_new =SimpleEvolve.gradientsignal_ODE_alternative(ψ_initial,
                             T,
                             signals,
                             n_qubits,
@@ -256,8 +283,10 @@ Grad = zeros(Float64, n_samples+1, n_qubits)
 grad_initial_fd=gradient_fd!(Grad, samples_initial)
 display(grad_initial_fd)
 # display(ψ_ode)
-# Grad = zeros(Float64, n_samples+1, n_qubits)
-# grad_initial_ode_new, ψ_ode_new, σ_ode_new=gradient_ode_new!(Grad, samples_initial)
+Grad = zeros(Float64, n_samples+1, n_qubits)
+grad_initial_ode_new, ψ_ode_new, σ_ode_new=gradient_ode_alternate!(Grad, samples_initial)
+Grad = zeros(Float64, n_samples+1, n_qubits)
+grad_initial_rotate_alternate, ψ_rotate_alternate, σ_rotate_alternate=gradient_rotate_alternate!(Grad, samples_initial)
 
 println("infidelity between the ode and direct exponentiation state")
 display(infidelity(ψ_ode,ψ_direct))
@@ -265,6 +294,13 @@ println("infidelity between the ode and rotate trotter exponentiation state")
 display(infidelity(ψ_ode,ψ_rotate))
 println("infidelity between the direct and rotate trotter exponentiation state")
 display(infidelity(ψ_direct,ψ_rotate))
+
+println("infidelity between the ode alternate and trotter alternate state")
+display(infidelity(ψ_ode_new,ψ_rotate_alternate))
+println("infidelity between the ode and rotate trotter alternate state")
+display(infidelity(σ_ode_new,σ_rotate_alternate))
+println("Norm of difference between gradient rotate and ode")
+display(norm(grad_initial_rotate_alternate-grad_initial_ode_new))
 
 println("infidelity between the ode and direct exponentiation sigma state")
 display(infidelity(σ_ode,σ_direct))
@@ -306,7 +342,7 @@ pulse_windows=range(0, T, length=n_samples+1)
 )
 grad_plots=plot(                       
     [plot(
-            pulse_windows, grad_initial_rotate[:,q]
+            pulse_windows, grad_initial_rotate_alternate[:,q]
     ) for q in 1:n_qubits]...,
     title = "Rotate Trotter Gradients",
     # ylim = [-0.005, +0.005],
@@ -315,7 +351,7 @@ grad_plots=plot(
 )
 grad_plots2=plot(                       
     [plot(
-            pulse_windows, grad_initial_ode[:,q]
+            pulse_windows, grad_initial_ode_new[:,q]
     ) for q in 1:n_qubits]...,
     title = " ODE Gradients",
     # ylim = [-0.005, +0.005],
