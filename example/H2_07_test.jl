@@ -8,11 +8,11 @@ using ForwardDiff
 using ForwardDiff: GradientConfig, Chunk
 using Random
 
-Cost_ham = npzread("h215.npy") 
+Cost_ham = npzread("h207.npy") 
 display(Cost_ham)
 n_qubits = round(Int, log2(size(Cost_ham,1)))
 n_levels = 2
-SYSTEM="h215"
+SYSTEM="h207"
 freqs = 2π*collect(4.8 .+ (0.02 * (1:n_qubits)))
 anharmonicities = 2π*0.3 * ones(n_qubits)
 coupling_map = Dict{QubitCoupling,Float64}()
@@ -24,7 +24,7 @@ device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
 T=10
-n_samples = 12
+n_samples = 20
 δt = T/n_samples
 t_=collect(0:δt:T)
 # for i in 1:n_samples+1

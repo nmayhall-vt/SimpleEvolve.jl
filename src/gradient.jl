@@ -46,14 +46,14 @@ function gradientsignal_ODE(ψ0,
     t_    = range(0,T,length=n_signals+1)
     t_series=range(0,T,length=n_trotter_steps+1)
     δt    = T/n_signals
-    dt= T/n_trotter_steps
+    dt    = T/n_trotter_steps
     tmp_σ = zeros(ComplexF64, length(ψ0))
     tmp_ψ = zeros(ComplexF64, length(ψ0))
-    V= eigvectors*Diagonal(exp.((-im*dt ) * eigvalues)) *eigvectors'
+    V     = eigvectors*Diagonal(exp.((-im*dt ) * eigvalues)) *eigvectors'
     # repeated_device_action = eigvectors*Diagonal(exp.((-im*δt ) * eigvalues)) *eigvectors'
     tmpM_ = [Matrix{ComplexF64}(undef, n_levels,n_levels) for q ∈ 1:n_sites]  
     tmpK_ = [Matrix{ComplexF64}(undef,  n_levels^q,  n_levels^q) for q ∈ 1:n_sites]
-    a= a_q(n_levels)
+    a     = a_q(n_levels)
 
     #evolve the sigma state with ODE in forward direction
     parameters = [signals, n_sites, drives,eigvalues,false, eigvectors]
@@ -90,7 +90,7 @@ function gradientsignal_ODE(ψ0,
     σ .= σ /norm(σ)
     transform!(σ, eigvectors', tmp_σ)
 
-    
+
     for i ∈ (1:n_signals)
 
         t_i = t_[i]
