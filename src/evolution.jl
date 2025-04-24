@@ -82,7 +82,7 @@ function evolve_ODE(ψ0,
     if basis != "eigenbasis"
         ψ0 = eigvectors' * ψ0
     end
-    
+    tmp_ψ = zeros(ComplexF64, length(ψ0))
     ψ = copy(ψ0)
 
     #evolve the state with ODE
@@ -93,8 +93,9 @@ function evolve_ODE(ψ0,
     ψ   .= sol.u[end]
     #normalize the states
     ψ .= ψ/norm(ψ)
-    # returning the final state in eigenbasis so during 
-    # computing expectation values we don't have to change basis
+    if basis != "eigenbasis" # rotating out of the eigenspace
+        ψ .= mul!(tmp_ψ, eigvectors, ψ)
+    end
     return ψ 
 
 end
@@ -130,20 +131,21 @@ function evolve_direct_exponentiation(ψ0,
     if basis != "eigenbasis"
         ψ0 = eigvectors' * ψ0
     end
-    
+    tmp_ψ = zeros(ComplexF64, length(ψ0))
     ψ = copy(ψ0)
     t_series=range(0,T,n_trotter_steps+1)
     dt= T/n_trotter_steps
     #tmp_ψ = Vector{ComplexF64}(undef, length(ψ0))
     
     # time evolution with direct exponentiation
-    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues,eigvectors, dt/2,t_series[1])
-    for i in 2:n_trotter_steps
+    for i in 1:n_trotter_steps+1
         ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues,eigvectors, dt,t_series[i])
     end
-    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues,eigvectors, dt/2,t_series[end])
     #normalize the states
     ψ .= ψ/norm(ψ)
+    if basis != "eigenbasis" # rotating out of the eigenspace
+        ψ .= mul!(tmp_ψ, eigvectors, ψ)
+    end
     return ψ
 end
 
@@ -180,7 +182,7 @@ function single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalu
     end
     H .+= H'
     # constructing interaction picture Hamiltonian
-    device_action .= exp.((im*t) .*eigvalues)                  
+    device_action .= exp.((im*t*(-1)^adjoint) .*eigvalues)                  
     expD = Diagonal(device_action)                          
     lmul!(expD, H); rmul!(H, expD') 
     # prepare time evolution operator for the trotter step
@@ -215,7 +217,7 @@ function trotter_evolve(ψ0,
                             eigvalues,
                             eigvectors;
                             basis = "eigenbasis",
-                            n_trotter_steps) 
+                            n_trotter_steps=1000) 
     # eigvalues, eigvecs = eigen(Hstatic)
     tmp_ψ = zeros(ComplexF64, length(ψ0))
     if basis == "eigenbasis" # rotating out of the eigenspace
@@ -234,7 +236,7 @@ function trotter_evolve(ψ0,
     ψ .= _step(ψ, t_[1], δt/2, signals, n_sites, a_q, tmp_ψ, tmpM_, tmpK_)
     transform!(ψ, V, tmp_ψ)
     for i ∈ (2:n_trotter_steps)
-        t_i = t_[i]-δt/2
+        t_i = t_[i]
         ψ .= _step(ψ, t_i, δt, signals, n_sites, a_q, tmp_ψ, tmpM_, tmpK_)
         transform!(ψ, V, tmp_ψ)                # transform!(σ, V, tmpV)=> σ=mul!(tmpV, V, σ) 
     end
@@ -245,7 +247,7 @@ function trotter_evolve(ψ0,
     ψ.*=exp.((im*T)*eigvalues)                 # rotate phases for final exp(iHDT)
     
     ψ ./= norm(ψ)
-    if basis == "eigenbasis" # rotating back to the eigenspace
+    if basis != "eigenbasis" # rotating out of the eigenspace
         ψ .= mul!(tmp_ψ, eigvectors, ψ)
     end
     return ψ

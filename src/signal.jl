@@ -62,3 +62,17 @@ function grad_signal_expansion(δΩ_,
     end
     return δΩ_
 end
+
+
+function Base.copy(mcs::MultiChannelSignal{T}) where T
+    # Create copies of each DigitizedSignal channel with copied samples
+    copied_channels = [
+        DigitizedSignal(
+            copy(ch.samples),  # Copies the samples vector to prevent mutation side effects
+            ch.δt,             # Float64 is immutable; no copy needed
+            ch.carrier_freq    # Float64 is immutable; no copy needed
+        ) 
+        for ch in mcs.channels
+    ]
+    return MultiChannelSignal{T}(copied_channels)
+end
