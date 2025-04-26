@@ -16,18 +16,18 @@ costfunction_ode(ψ0, eigvals, signal, n_sites, drives, T, Cost_ham; tol_ode=1e-
 
 """
 
-function costfunction_ode(ψ0,
-                         eigvals,
+function costfunction_ode(ψ0::Vector{ComplexF64},
+                         eigvals::Vector{Float64},
                          signal, 
-                         n_sites, 
+                         n_sites::Int, 
                          drives,
-                         eigvectors, 
-                         T, 
+                         eigvectors::Matrix{ComplexF64}, 
+                         T::Float64, 
                          Cost_ham;
                          basis = "eigenbasis",
                          tol_ode=1e-8)
+
     ψ_ode = evolve_ODE(ψ0, T, signal, n_sites, drives,eigvals,eigvectors;basis=basis,tol_ode=tol_ode)
-    # Cost_ham = eigvectors' * Cost_ham * eigvectors
     return real(ψ_ode'*Cost_ham*ψ_ode),  ψ_ode
 end
 """
@@ -56,35 +56,32 @@ costfunction_direct_exponentiation(ψ0,
 
 
 """
-function costfunction_direct_exponentiation(ψ0, 
-                                            eigvals,
-                                            eigvectors,
-                                            signal, 
-                                            n_sites, 
-                                            drives,
-                                            Cost_ham, 
-                                            T;
-                                            basis = "eigenbasis",
-                                            n_trotter_steps=1000
-                                            )
+function costfunction_direct_exponentiation(ψ0::Vector{ComplexF64}, 
+                            eigvals::Vector{Float64},
+                            eigvectors::Matrix{ComplexF64},
+                            signal, 
+                            n_sites::Int, 
+                            drives,
+                            Cost_ham, 
+                            T::Float64;
+                            basis = "eigenbasis",
+                            n_trotter_steps=1000)
 
     ψ_direct = evolve_direct_exponentiation(ψ0, T, signal, n_sites, drives, eigvals,eigvectors;basis=basis, n_trotter_steps=n_trotter_steps)
-    # Cost_ham = eigvectors' * Cost_ham * eigvectors
     return real(ψ_direct'*Cost_ham*ψ_direct), ψ_direct
 end
-function costfunction_trotter(ψ0, 
-                            eigvalues,
-                            eigvectors,
+function costfunction_trotter(ψ0::Vector{ComplexF64}, 
+                            eigvalues::Vector{Float64},
+                            eigvectors::Matrix{ComplexF64},
                             signals, 
-                            n_sites,
-                            n_levels, 
-                            a_q,
+                            n_sites::Int,
+                            n_levels::Int, 
+                            a_q::Matrix{Float64},
                             Cost_ham,
-                            T;
+                            T::Float64;
                             basis = "eigenbasis", 
                             n_trotter_steps=1000
                             )
     ψ_trotter= trotter_evolve(ψ0,T,signals,n_sites,n_levels,a_q,eigvalues,eigvectors;basis=basis,n_trotter_steps=n_trotter_steps)
-    # Cost_ham = eigvectors' * Cost_ham * eigvectors
     return real(ψ_trotter'*Cost_ham*ψ_trotter), ψ_trotter
 end

@@ -11,8 +11,11 @@ using Random
 Cost_ham = npzread("h207.npy") 
 display(Cost_ham)
 n_qubits = round(Int, log2(size(Cost_ham,1)))
-n_levels = 2
+n_levels = 3
 SYSTEM="h207"
+Π = projector(n_qubits, 2, n_levels)    
+Cost_ham = Hermitian(Π'*Cost_ham*Π)
+display(Cost_ham)
 freqs = 2π*collect(4.8 .+ (0.02 * (1:n_qubits)))
 anharmonicities = 2π*0.3 * ones(n_qubits)
 coupling_map = Dict{QubitCoupling,Float64}()
@@ -24,7 +27,7 @@ device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
 T=10.0
-n_samples = 20
+n_samples = 25
 δt = T/n_samples
 t_=collect(0:δt:T)
 # for i in 1:n_samples+1

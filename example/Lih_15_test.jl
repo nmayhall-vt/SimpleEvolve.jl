@@ -27,13 +27,11 @@ device = choose_qubits(1:n_qubits, Transmon(
     )
 ))
 
-T=15
-n_samples = 150
+T=15.0
+n_samples = 40
 δt = T/n_samples
 t_=collect(0:δt:T)
-# for i in 1:n_samples+1
-#     display(t_[i]) 
-# end
+
 carrier_freqs =[23.876104167282428,
 27.01769682087222,
 22.61946710584651,
@@ -49,22 +47,6 @@ samples_initial=reshape(samples_matrix, :)
 signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals = MultiChannelSignal(signals_)
 
-
-# using NPZ
-# amp0=npzread("./pulses0_amp.npy")
-# sample_matrix=amp0
-# amp_vec= reshape(samples_matrix, :)
-# pulse_windows=range(0, T, length=n_samples+1)
-# samples_initial=amp_vec
-# # Build MultiChannelSignal
-# channels = [
-#     DigitizedSignal(
-#         sample_matrix[1:n_samples+1, i],  # Amplitude samples for channel i
-#         δt,
-#         carrier_freqs[i],   # Carrier frequency for channel i
-#     ) for i in 1:n_qubits
-# ]
-# multi_signal = MultiChannelSignal(channels)
 
 
 # initial state

@@ -8,11 +8,15 @@ using ForwardDiff
 using ForwardDiff: GradientConfig, Chunk
 using Random
 
-Cost_ham = npzread("h207.npy") 
-display(Cost_ham)
+Cost_ham = npzread("h215.npy") 
+# display(Cost_ham)
+
 n_qubits = round(Int, log2(size(Cost_ham,1)))
-n_levels = 2
-SYSTEM="h207"
+n_levels = 3
+SYSTEM="h215"
+Π = projector(n_qubits, 2, n_levels)    
+Cost_ham = Hermitian(Π'*Cost_ham*Π)
+display(Cost_ham)
 freqs = 2π*collect(4.8 .+ (0.02 * (1:n_qubits)))
 anharmonicities = 2π*0.3 * ones(n_qubits)
 coupling_map = Dict{QubitCoupling,Float64}()
@@ -24,7 +28,7 @@ device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
 T=10.0
-n_samples = 20
+n_samples = 25
 δt = T/n_samples
 t_=collect(0:δt:T)
 # for i in 1:n_samples+1
@@ -33,7 +37,8 @@ t_=collect(0:δt:T)
 
 # INITIAL PARAMETERS
 # samples_matrix=[2π*sin(4π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
-samples_matrix=[sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
+samples_matrix=[sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits]
+ 
 pulse_windows=range(0, T, length=n_samples+1)
 
 samples_initial=reshape(samples_matrix, :)
@@ -43,24 +48,10 @@ samples_initial=reshape(samples_matrix, :)
 carrier_freqs = [22.728727738461984,26.20275686353819]
 # signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
+# signals_ = [DigitizedSignal([2π*0.02 for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals = MultiChannelSignal(signals_)
 
 
-# using NPZ
-# amp0=npzread("./pulses0_amp.npy")
-# sample_matrix=amp0
-# amp_vec= reshape(samples_matrix, :)
-# pulse_windows=range(0, T, length=n_samples+1)
-# samples_initial=amp_vec
-# # Build MultiChannelSignal
-# channels = [
-#     DigitizedSignal(
-#         sample_matrix[1:n_samples+1, i],  # Amplitude samples for channel i
-#         δt,
-#         carrier_freqs[i],   # Carrier frequency for channel i
-#     ) for i in 1:n_qubits
-# ]
-# multi_signal = MultiChannelSignal(channels)
 
 
 # initial state

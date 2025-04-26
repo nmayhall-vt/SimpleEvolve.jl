@@ -25,8 +25,8 @@ device = choose_qubits(1:n_qubits, Transmon(
         QubitCoupling(1,4) => 2π*.021,
     )
 ))
-T=10
-n_samples = 120
+T=15.0
+n_samples = 40
 δt = T/n_samples
 t_=collect(0:δt:T)
 # for i in 1:n_samples+1
@@ -47,22 +47,6 @@ samples_initial=reshape(samples_matrix, :)
 signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals = MultiChannelSignal(signals_)
 
-
-# using NPZ
-# amp0=npzread("./pulses0_amp.npy")
-# sample_matrix=amp0
-# amp_vec= reshape(samples_matrix, :)
-# pulse_windows=range(0, T, length=n_samples+1)
-# samples_initial=amp_vec
-# # Build MultiChannelSignal
-# channels = [
-#     DigitizedSignal(
-#         sample_matrix[1:n_samples+1, i],  # Amplitude samples for channel i
-#         δt,
-#         carrier_freqs[i],   # Carrier frequency for channel i
-#     ) for i in 1:n_qubits
-# ]
-# multi_signal = MultiChannelSignal(channels)
 
 
 # initial state
@@ -259,48 +243,13 @@ Grad = zeros(Float64, n_samples+1, n_qubits)
 grad_initial__=gradient_rotate!(Grad, samples_initial)
 Grad = zeros(Float64, n_samples+1, n_qubits)
 grad_initial_direct=gradient_direct_exp!(Grad, samples_initial)
-grad_initial_fd=gradient_fd!(Grad, samples_initial)
-display(grad_initial_fd)
+# grad_initial_fd=gradient_fd!(Grad, samples_initial)
+# display(grad_initial_fd)
 method = "trotter"
 # method = "ode"
 # method = "direct"
 # method = "rotate_ode"
 Ω0=copy(samples_matrix)
-
-pulse_windows=range(0, T, length=n_samples+1)
-Ω_plots = plot(                       
-    [plot(pulse_windows, Ω0[:,q]) for q in 1:n_qubits]...,
-    title = "Initial Signals",
-    legend = false,
-    layout = (n_qubits,1),
-)
-grad_plots=plot(                       
-    [plot(
-            pulse_windows, grad_initial__[:,q]
-    ) for q in 1:n_qubits]...,
-    title = "Rotate Trotter Gradients",
-    legend = false,
-    layout = (n_qubits,1),
-)
-grad_plots2=plot(                       
-    [plot(
-            pulse_windows, grad_initial[:,q]
-    ) for q in 1:n_qubits]...,
-    title = " ODE Gradients",
-    legend = false,
-    layout = (n_qubits,1),
-)
-grad_plots3=plot(                       
-    [plot(
-            pulse_windows, grad_initial_fd[:,q]
-    ) for q in 1:n_qubits]...,
-    title = "fd Gradients",
-    legend = false,
-    layout = (n_qubits,1),
-)
-
-plot(Ω_plots, grad_plots2,grad_plots,grad_plots3, layout=(2,2))
-savefig("initial_signals_$(n_qubits)_$(n_levels)_$(SYSTEM)_$(n_samples)_$(T)_$(method).pdf")
 
 
 
@@ -356,7 +305,7 @@ pulse_windows=range(0, T, length=n_samples+1)
     [plot(
             pulse_windows, Ω[:,q]
     ) for q in 1:n_qubits]...,
-    title = "Final Signals",
+    title = "Final ODE Signals",
     legend = false,
     layout = (n_qubits,1),
 )

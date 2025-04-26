@@ -21,18 +21,16 @@ gradientsignal_ODE(ψ0, T, signals, n_sites, drives, eigvalues, device_action_in
 
 """
 
-function gradientsignal_ODE(ψ0,
-                            T,
+function gradientsignal_ODE(ψ0::Vector{ComplexF64},
+                            T::Float64,
                             signals,
-                            n_sites,
-                            drives,
-                            eigvalues,
-                            eigvectors,
+                            n_sites::Int64,
+                            drives::Vector{Matrix{Float64}},
+                            eigvalues::Vector{Float64},
+                            eigvectors::Matrix{ComplexF64},
                             cost_ham,
-                            n_signals,
+                            n_signals::Int64,
                             ∂Ω=Matrix{Float64}(undef,n_signals+1,n_sites);
-                            V = nothing,
-                            a = nothing,
                             basis = "eigenbasis",
                             tol_ode=1e-8,
                             n_levels=2) 
@@ -45,25 +43,13 @@ function gradientsignal_ODE(ψ0,
     ψ     = copy(ψ0)
     σ     = copy(ψ0)
     t_    = range(0,T,length=n_signals+1)
-    t_series=range(0,T,length=n_trotter_steps+1)
     δt    = T/n_signals
-    dt    = T/n_trotter_steps
     tmp_σ = zeros(ComplexF64, length(ψ0))
     tmp_ψ = zeros(ComplexF64, length(ψ0))
-    tmpM_ = [Matrix{ComplexF64}(undef, n_levels,n_levels) for q ∈ 1:n_sites]  
-    tmpK_ = [Matrix{ComplexF64}(undef,  n_levels^q,  n_levels^q) for q ∈ 1:n_sites]
-    
-
-    if V == nothing
-        V     = eigvectors*Diagonal(exp.((-im*dt ) * eigvalues)) *eigvectors'
-    end
-    if a == nothing
-        a = a_q(n_levels)
-    end
    
     
     #evolve the sigma state with ODE in forward direction
-    parameters = [signals, n_sites, drives,eigvalues,false, eigvectors]
+    parameters = [signals, n_sites, drives,eigvalues,false]
     prob = ODEProblem(dψdt!, σ, (0.0,T), parameters)
     sol  = solve(prob, abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
     σ .= sol.u[end]
@@ -77,7 +63,7 @@ function gradientsignal_ODE(ψ0,
     transform!(σ,eigvectors',tmp_σ)            # transform the state to the eigenbasis
     # σ .*=exp.((-im*T)*eigvalues)             # rotate phases for final exp(iHDT)
     # We don't need to rotate the phases here, I have checked with constant pulse
-    parameters = [signals, n_sites, drives,eigvalues,false,eigvectors]# this should be false 
+    parameters = [signals, n_sites, drives,eigvalues,false]# this should be false 
     # I have checked this by passing constant pulse
     prob_ = ODEProblem(dψdt!, σ, (T,0.0), parameters)
     sol_  = solve(prob_,alg_hints = [:stiff], abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
@@ -89,8 +75,8 @@ function gradientsignal_ODE(ψ0,
 
         t_i = t_[i]
         t_f = t_[i]+δt
-        gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,eigvectors,t_i,i)
-        parameters = [signals, n_sites, drives, eigvalues,false, eigvectors]
+        gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,t_i,i)
+        parameters = [signals, n_sites, drives, eigvalues,false]
         prob_ψ = ODEProblem(dψdt!, ψ, (t_i, t_f), parameters)
         sol_ψ = solve(prob_ψ,alg_hints = [:stiff],abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
         ψ .= sol_ψ.u[end]
@@ -100,7 +86,7 @@ function gradientsignal_ODE(ψ0,
         σ .= sol_σ.u[end]
     
     end
-    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,eigvectors,(t_[end]),n_signals+1)
+    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,(t_[end]),n_signals+1)
     
     σ .= σ /norm(σ)
     ψ .= ψ /norm(ψ)
@@ -135,15 +121,14 @@ gradient_eachtimestep(δΩ, ψ, σ, multi_signal, n_sites, drives, device_action
 
 
 function gradient_eachtimestep!(∂Ω,
-                                ψ,
-                                σ,
+                                ψ::Vector{ComplexF64},
+                                σ::Vector{ComplexF64},
                                 multi_signal,
-                                n_sites,
-                                drives,
-                                eigvalues,
-                                eigvectors,
-                                t,
-                                time_index)
+                                n_sites::Int64,
+                                drives::Vector{Matrix{Float64}},
+                                eigvalues::Vector{Float64},
+                                t::Float64,
+                                time_index::Int64)
     
     dim= length(ψ)
     dH_dΩ = zeros(ComplexF64, dim, dim)
@@ -196,15 +181,15 @@ gradientsignal_direct_exponentiation(ψ0, T, signals, n_sites, drives, eigvalues
 
 """
 
-function gradientsignal_direct_exponentiation(ψ0,
-                                        T,
+function gradientsignal_direct_exponentiation(ψ0::Vector{ComplexF64},
+                                        T::Float64,
                                         signals,
-                                        n_sites,
-                                        drives,
-                                        eigvalues,
-                                        eigvectors,
+                                        n_sites::Int64,
+                                        drives::Vector{Matrix{Float64}},
+                                        eigvalues::Vector{Float64},
+                                        eigvectors::Matrix{ComplexF64},
                                         cost_ham,
-                                        n_signals,
+                                        n_signals::Int64,
                                         ∂Ω = Matrix{Float64}(undef, n_signals+1, n_sites);
                                         basis = "eigenbasis",
                                         n_trotter_steps=1000)
@@ -225,7 +210,7 @@ function gradientsignal_direct_exponentiation(ψ0,
 
     # time evolution with direct exponentiation
     for i in 1:n_trotter_steps+1
-        σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, eigvectors,dt,t_series[i])
+        σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues,dt,t_series[i])
     end
     σ .= σ /norm(σ)
     # σ .*=exp.((im*T)*eigvalues)               # rotate phases for final exp(iHDT)
@@ -241,16 +226,16 @@ function gradientsignal_direct_exponentiation(ψ0,
 
     #time evolution backward for sigma state
     for i in reverse(1:n_trotter_steps+1)
-        σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues,eigvectors, dt,t_series[i],true)
+        σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, dt,t_series[i],true)
     end
     σ .= σ /norm(σ)
     #calculating gradient by evolving both ψ and σ states
     for i in 1:n_signals+1
-        gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,eigvectors,t_[i],i)
-        ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues,eigvectors, Δt,t_[i])
-        σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues,eigvectors, Δt,t_[i])
+        gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,t_[i],i)
+        ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, Δt,t_[i])
+        σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, Δt,t_[i])
     end
-    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,eigvectors,t_series[end],n_signals+1)
+    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,t_series[end],n_signals+1)
   
     ψ .= ψ/norm(ψ)
     σ .= σ/norm(σ)
@@ -263,19 +248,22 @@ function gradientsignal_direct_exponentiation(ψ0,
 end
 
 
-function gradientsignal_rotate(ψ0,
-                            T,
+function gradientsignal_rotate(ψ0::Vector{ComplexF64},
+                            T::Float64,
                             signals,
-                            n_sites,
-                            n_levels,
-                            a_q,
-                            eigvalues,
-                            eigvectors,
+                            n_sites::Int64,
+                            n_levels::Int64,
+                            a_q::Matrix{Float64},
+                            eigvalues::Vector{Float64},
+                            eigvectors::Matrix{ComplexF64},
                             cost_ham,
-                            n_signals,
+                            n_signals::Int64,
                             ∂Ω=Matrix{Float64}(undef,n_signals+1,n_sites);
                             n_trotter_steps=1000,
-                            basis = "eigenbasis") 
+                            basis = "eigenbasis",
+                            V_evolve = nothing,
+                            V_gradient = nothing) 
+    
     ## transform!(σ, V, tmpV)=> σ=mul!(tmpV, V, σ) 
     # eigvalues, eigvecs = eigen(Hstatic)
     tmp_σ = zeros(ComplexF64, length(ψ0))
@@ -289,18 +277,24 @@ function gradientsignal_rotate(ψ0,
     t_series=range(0,T,length=n_trotter_steps+1)
     δt    = T/n_signals
     Δt    = T/n_trotter_steps
-    V     = eigvectors*Diagonal(exp.((-im*δt ) * eigvalues)) *eigvectors'
-    V_backward = eigvectors*Diagonal(exp.((im*δt ) * eigvalues)) *eigvectors'
+
+    if V_evolve == nothing
+        V_evolve = eigvectors*Diagonal(exp.((-im*Δt ) * eigvalues)) *eigvectors'
+    end
+    if V_gradient == nothing
+        V_gradient     = eigvectors*Diagonal(exp.((-im*δt ) * eigvalues)) *eigvectors'
+    end
+    
     tmpM_ = [Matrix{ComplexF64}(undef, n_levels,n_levels) for q ∈ 1:n_sites]  
     tmpK_ = [Matrix{ComplexF64}(undef,  n_levels^q,  n_levels^q) for q ∈ 1:n_sites]
 
 
     σ .= single_step(σ, t_series[1], Δt/2, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_)
-    transform!(σ, V, tmp_σ)
+    transform!(σ, V_evolve, tmp_σ)
     for i ∈ (2:n_trotter_steps)
         t_i = t_series[i]
         σ .= single_step(σ, t_i, Δt, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_)
-        transform!(σ, V, tmp_σ)                #transform!(σ, V, tmpV)=> σ=mul!(tmpV, V, σ) 
+        transform!(σ, V_evolve, tmp_σ)                #transform!(σ, V, tmpV)=> σ=mul!(tmpV, V, σ) 
     end
     σ .= single_step(σ, t_series[end], Δt/2, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_)
     σ .= σ /norm(σ)
@@ -318,11 +312,11 @@ function gradientsignal_rotate(ψ0,
     
 
     σ .= single_step(σ, t_series[end], Δt/2, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_,true)
-    transform!(σ, V', tmp_σ)
+    transform!(σ, V_evolve', tmp_σ)
     for i ∈ reverse(2:n_trotter_steps)
         t_i = t_series[i]
         σ .= single_step(σ, t_i, Δt, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_,true)
-        transform!(σ, V', tmp_σ)
+        transform!(σ, V_evolve', tmp_σ)
     end
     σ .= single_step(σ, t_series[1], Δt/2, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_,true)
     σ .= σ /norm(σ)
@@ -334,8 +328,8 @@ function gradientsignal_rotate(ψ0,
 
     σ .= single_step(σ, t_[1], δt/2, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_)
     ψ .= single_step(ψ, t_[1], δt/2, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_)
-    transform!(σ, V, tmp_σ)
-    transform!(ψ, V, tmp_σ)
+    transform!(σ, V_gradient, tmp_σ)
+    transform!(ψ, V_gradient, tmp_σ)
 
 
     for i ∈ (2:n_signals)
@@ -344,8 +338,8 @@ function gradientsignal_rotate(ψ0,
                                 n_sites, a_q,tmp_σ,tmpM_,tmpK_)
         σ .= single_step(σ, t_i, δt, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_)
         ψ .= single_step(ψ, t_i, δt, signals, n_sites, a_q, tmp_σ, tmpM_, tmpK_)
-        transform!(σ, V, tmp_σ)
-        transform!(ψ, V, tmp_σ)
+        transform!(σ, V_gradient, tmp_σ)
+        transform!(ψ, V_gradient, tmp_σ)
 
 
     end
@@ -370,7 +364,18 @@ end
 
 
 
-function gradient_eachstep!(∂Ω, i, σ, ψ, t, τ, multi_signal, n_qubits, a, tmpV, tmpM_, tmpK_)
+function gradient_eachstep!(∂Ω,
+                            i::Int64,
+                            σ::Vector{ComplexF64},
+                            ψ::Vector{ComplexF64},
+                            t::Float64,
+                            τ::Float64,
+                            multi_signal,
+                            n_qubits::Int64,
+                            a::Matrix{Float64},
+                            tmpV::Vector{ComplexF64},
+                            tmpM_::Vector{Matrix{ComplexF64}},
+                            tmpK_::Vector{Matrix{ComplexF64}})
     for q ∈ 1:n_qubits
         tmpM_[q] .= one(a)
     end
@@ -396,7 +401,16 @@ end
 
 
 """ Auxiliary function to evolve a single step in time. """
-function single_step(ψ, t, τ, signals,n_qubits, a, tmpV, tmpM_, tmpK_, adjoint=false)
+function single_step(ψ::Vector{ComplexF64},
+                    t::Float64,
+                    τ::Float64,
+                    signals,
+                    n_qubits::Int64,
+                    a::Matrix{Float64},
+                    tmpV::Vector{ComplexF64},
+                    tmpM_::Vector{Matrix{ComplexF64}},
+                    tmpK_::Vector{Matrix{ComplexF64}}, 
+                    adjoint=false)
    
     for q ∈ 1:n_qubits
         Ω = amplitude(signals.channels[q], t)
@@ -413,15 +427,15 @@ end
 
 
 
-function gradientsignal_finite_difference(ψ0,
-                            T,
+function gradientsignal_finite_difference(ψ0::Vector{ComplexF64},
+                            T::Float64,
                             signals,
-                            n_sites,
-                            drives,
-                            eigvalues,
-                            eigvectors,
+                            n_sites::Int64,
+                            drives::Vector{Matrix{Float64}},
+                            eigvalues::Vector{Float64},
+                            eigvectors::Matrix{ComplexF64},
                             cost_ham,
-                            n_signals,
+                            n_signals::Int64,
                             ∂Ω=Matrix{Float64}(undef,n_signals+1,n_sites);
                             basis = "eigenbasis",
                             ϵ = 1e-6) 
@@ -467,10 +481,17 @@ function gradientsignal_finite_difference(ψ0,
 end
 
 
-function gradientsignal_fd(ψ0, T, signals, n_sites, drives, eigvalues,
-                                          eigvectors, cost_ham, n_signals,
-                                          ∂Ω=Matrix{Float64}(undef,n_signals+1,n_sites);
-                                          basis="eigenbasis", ϵ=1e-6)
+function gradientsignal_fd(ψ0::Vector{ComplexF64},
+                        T::Float64,
+                        signals,
+                        n_sites::Int64,
+                        drives::Vector{Matrix{Float64}},
+                        eigvalues::Vector{Float64},
+                        eigvectors::Matrix{ComplexF64},
+                        cost_ham,
+                        n_signals::Int64,
+                        ∂Ω=Matrix{Float64}(undef,n_signals+1,n_sites);
+                        basis="eigenbasis", ϵ=1e-6)
     # Basis transformation
     basis != "eigenbasis" && (ψ0 = eigvectors' * ψ0)
     

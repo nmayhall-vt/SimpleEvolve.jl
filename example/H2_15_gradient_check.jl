@@ -22,18 +22,17 @@ end
 device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
-T=10
-n_samples = 1000
+T=10.0
+n_samples = 200
 δt = T/n_samples
 t_=collect(0:δt:T)
-# for i in 1:n_samples+1
-#     display(t_[i]) 
-# end
+
 
 # INITIAL PARAMETERS
 # samples_matrix=[2π*0.02*sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
 samples_matrix=[sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
 pulse_windows=range(0, T, length=n_samples+1)
+# samples_matrix=[2π*0.04 for t in 0:n_samples,i in 1:n_qubits]
 
 samples_initial=reshape(samples_matrix, :)
 # carrier_freqs = freqs
@@ -41,20 +40,20 @@ samples_initial=reshape(samples_matrix, :)
 carrier_freqs = [22.728727738461984,26.20275686353819]
 # signals_ = [DigitizedSignal([2π*0.02* sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
+# signals_ = [DigitizedSignal([2π*0.04 for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals = MultiChannelSignal(signals_)
 
 
 # initial state
 initial_state = "1"^(n_qubits÷2) * "0"^(n_qubits÷2)
-ψ_initial_ = zeros(ComplexF64, n_levels^n_qubits)  
-ψ_initial_[1 + parse(Int, initial_state, base=n_levels)] = one(ComplexF64) 
-@time energy1,ϕ = costfunction_ode(ψ_initial_, eigvalues, signals, n_qubits, drives,eigvecs, T,Cost_ham;basis="qubitbasis",tol_ode=1e-10)   
-ψ_initial=copy(ϕ)
+ψ_initial = zeros(ComplexF64, n_levels^n_qubits)  
+ψ_initial[1 + parse(Int, initial_state, base=n_levels)] = one(ComplexF64) 
+
 
 H_static = static_hamiltonian(device, n_levels)
 #eigenvalues and eigenvectors of the static Hamiltonian
 drives =a_fullspace(n_qubits, n_levels)
-eigvalues, eigvecs = eigen(Hermitian(H_static))  # Ensures real eigenvalues
+eigvalues, eigvectors = eigen(Hermitian(H_static))  # Ensures real eigenvalues
 println("Eignvalues of our static Hamiltonian")
 display(eigvalues)
 
@@ -63,9 +62,9 @@ tol_ode=1e-10
 E_actual = Λ[1]
 println("Actual energy: $E_actual") 
 # display(drives[1])
-display(eigvecs)
+display(eigvectors)
 for i in 1:n_qubits
-    drives[i] = eigvecs' * drives[i] * eigvecs
+    drives[i] = eigvectors' * drives[i] * eigvectors
 end
 
 function costfunction_o(samples)
@@ -75,7 +74,7 @@ function costfunction_o(samples)
     samples = reshape(samples, n_samples+1, n_qubits)
     signals_= [DigitizedSignal(samples[:,i], δt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
     signals= MultiChannelSignal(signals_)
-    energy,ϕ = costfunction_ode(ψ_initial, eigvalues, signals, n_qubits, drives,eigvecs,  T,Cost_ham,basis="qubitbasis",tol_ode=tol_ode)   
+    energy,ϕ = costfunction_ode(ψ_initial, eigvalues, signals, n_qubits, drives,eigvectors,  T,Cost_ham,basis="qubitbasis",tol_ode=tol_ode)   
     return energy
 end
 
@@ -83,7 +82,7 @@ function costfunction_t(samples)
     samples = reshape(samples, n_samples+1, n_qubits)
     signals_= [DigitizedSignal(samples[:,i], δt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
     signals= MultiChannelSignal(signals_)
-    energy,ϕ =costfunction_trotter(ψ_initial, eigvalues,eigvecs,signals, n_qubits,n_levels, a,Cost_ham,T;basis="qubitbasis",  n_trotter_steps=n_trotter_steps )  
+    energy,ϕ =costfunction_trotter(ψ_initial, eigvalues,eigvectors,signals, n_qubits,n_levels, a,Cost_ham,T;basis="qubitbasis",  n_trotter_steps=n_trotter_steps )  
     return energy
 end
 
@@ -108,7 +107,7 @@ function gradient_rotate_alternate!(Grad, samples)
                             n_levels,
                             a,
                             eigvalues,
-                            eigvecs,
+                            eigvectors,
                             Cost_ham,
                             n_samples_grad,
                             ∂Ω0;
@@ -123,6 +122,7 @@ function gradient_rotate_alternate!(Grad, samples)
     end
     return Grad, ψ_rotate, σ_rotate
 end
+
 function gradient_rotate!(Grad, samples)
     Grad = reshape(Grad, :, n_qubits)
     samples = reshape(samples, n_samples+1, n_qubits)
@@ -135,7 +135,7 @@ function gradient_rotate!(Grad, samples)
                             n_levels,
                             a,
                             eigvalues,
-                            eigvecs,
+                            eigvectors,
                             Cost_ham,
                             n_samples_grad,
                             ∂Ω0;
@@ -161,7 +161,7 @@ function gradient_ode!(Grad, samples)
                             n_qubits,
                             drives,
                             eigvalues,
-                            eigvecs,
+                            eigvectors,
                             Cost_ham,
                             n_samples_grad,
                             ∂Ω0;
@@ -186,7 +186,7 @@ function gradient_ode_alternate!(Grad, samples)
                             n_qubits,
                             drives,
                             eigvalues,
-                            eigvecs,
+                            eigvectors,
                             Cost_ham,
                             n_samples_grad,
                             ∂Ω0;
@@ -212,7 +212,7 @@ function gradient_direct_exp!(Grad, samples)
                             n_qubits,
                             drives,
                             eigvalues,
-                            eigvecs,
+                            eigvectors,
                             Cost_ham,
                             n_samples_grad,
                             ∂Ω0;
@@ -238,7 +238,7 @@ function gradient_fd!(Grad, samples)
                             n_qubits,
                             drives,
                             eigvalues,
-                            eigvecs,
+                            eigvectors,
                             Cost_ham,
                             n_samples_grad,
                             ∂Ω0;
@@ -255,13 +255,13 @@ function gradient_fd!(Grad, samples)
 end
 
 
-@time energy1,ϕ = costfunction_ode(ψ_initial, eigvalues, signals, n_qubits, drives,eigvecs, T,Cost_ham;basis="qubitbasis",tol_ode=1e-10)   
+@time energy1,ϕ = costfunction_ode(ψ_initial, eigvalues, signals, n_qubits, drives,eigvectors, T,Cost_ham;basis="qubitbasis",tol_ode=1e-10)   
 println("ode evolved energy is ",energy1)
 # trotter direct exponentiation evolution
 n_trotter_steps = 2000
-@time energy2,ψ_d = costfunction_direct_exponentiation(ψ_initial, eigvalues,eigvecs, signals, n_qubits, drives,Cost_ham, T;basis="qubitbasis", n_trotter_steps=n_trotter_steps)
+@time energy2,ψ_d = costfunction_direct_exponentiation(ψ_initial, eigvalues,eigvectors, signals, n_qubits, drives,Cost_ham, T;basis="qubitbasis", n_trotter_steps=n_trotter_steps)
 println("direct evolved energy is ",energy2)
-@time energy3,ψ_t = costfunction_trotter(ψ_initial, eigvalues,eigvecs,signals, n_qubits,n_levels, a,Cost_ham,T;basis="qubitbasis",  n_trotter_steps=n_trotter_steps) 
+@time energy3,ψ_t = costfunction_trotter(ψ_initial, eigvalues,eigvectors,signals, n_qubits,n_levels, a,Cost_ham,T;basis="qubitbasis",  n_trotter_steps=n_trotter_steps) 
 println("trotter evolved energy is ",energy3)
 
 println("infidelity between the ode and direct exponentiation")
@@ -283,10 +283,10 @@ Grad = zeros(Float64, n_samples+1, n_qubits)
 grad_initial_fd=gradient_fd!(Grad, samples_initial)
 display(grad_initial_fd)
 # display(ψ_ode)
-Grad = zeros(Float64, n_samples+1, n_qubits)
-grad_initial_ode_new, ψ_ode_new, σ_ode_new=gradient_ode_alternate!(Grad, samples_initial)
-Grad = zeros(Float64, n_samples+1, n_qubits)
-grad_initial_rotate_alternate, ψ_rotate_alternate, σ_rotate_alternate=gradient_rotate_alternate!(Grad, samples_initial)
+# Grad = zeros(Float64, n_samples+1, n_qubits)
+# grad_initial_ode_new, ψ_ode_new, σ_ode_new=gradient_ode_alternate!(Grad, samples_initial)
+# Grad = zeros(Float64, n_samples+1, n_qubits)
+# grad_initial_rotate_alternate, ψ_rotate_alternate, σ_rotate_alternate=gradient_rotate_alternate!(Grad, samples_initial)
 
 println("infidelity between the ode and direct exponentiation state")
 display(infidelity(ψ_ode,ψ_direct))
@@ -295,12 +295,12 @@ display(infidelity(ψ_ode,ψ_rotate))
 println("infidelity between the direct and rotate trotter exponentiation state")
 display(infidelity(ψ_direct,ψ_rotate))
 
-println("infidelity between the ode alternate and trotter alternate state")
-display(infidelity(ψ_ode_new,ψ_rotate_alternate))
-println("infidelity between the ode and rotate trotter alternate state")
-display(infidelity(σ_ode_new,σ_rotate_alternate))
-println("Norm of difference between gradient rotate and ode")
-display(norm(grad_initial_rotate_alternate-grad_initial_ode_new))
+# println("infidelity between the ode alternate and trotter alternate state")
+# display(infidelity(ψ_ode_new,ψ_rotate_alternate))
+# println("infidelity between the ode and rotate trotter alternate state")
+# display(infidelity(σ_ode_new,σ_rotate_alternate))
+# println("Norm of difference between gradient rotate and ode")
+# display(norm(grad_initial_rotate_alternate-grad_initial_ode_new))
 
 println("infidelity between the ode and direct exponentiation sigma state")
 display(infidelity(σ_ode,σ_direct))
@@ -342,7 +342,7 @@ pulse_windows=range(0, T, length=n_samples+1)
 )
 grad_plots=plot(                       
     [plot(
-            pulse_windows, grad_initial_rotate_alternate[:,q]
+            pulse_windows, grad_initial_rotate[:,q]
     ) for q in 1:n_qubits]...,
     title = "Rotate Trotter Gradients",
     # ylim = [-0.005, +0.005],
@@ -351,7 +351,7 @@ grad_plots=plot(
 )
 grad_plots2=plot(                       
     [plot(
-            pulse_windows, grad_initial_ode_new[:,q]
+            pulse_windows, grad_initial_ode[:,q]
     ) for q in 1:n_qubits]...,
     title = " ODE Gradients",
     # ylim = [-0.005, +0.005],
@@ -368,6 +368,6 @@ grad_plots3=plot(
     layout = (n_qubits,1),
 )
 
-plot(Ω_plots, grad_plots2,grad_plots,grad_plots3, layout=(2,2))
-savefig("initial_signals_$(n_qubits)_$(n_levels)_$(SYSTEM)_$(n_samples)_$(T)_$(method).pdf")
+plot(Ω_plots, grad_plots2,grad_plots, layout=(1,3))
+savefig("initial_signals_$(n_qubits)_$(n_levels)_$(SYSTEM).pdf")
 

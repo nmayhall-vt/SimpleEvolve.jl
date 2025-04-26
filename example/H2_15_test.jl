@@ -23,8 +23,8 @@ end
 device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
-T=10
-n_samples = 12
+T=10.0
+n_samples = 100
 δt = T/n_samples
 t_=collect(0:δt:T)
 # for i in 1:n_samples+1
@@ -33,7 +33,8 @@ t_=collect(0:δt:T)
 
 # INITIAL PARAMETERS
 # samples_matrix=[2π*sin(4π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
-samples_matrix=[sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
+samples_matrix=[sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits]
+ 
 pulse_windows=range(0, T, length=n_samples+1)
 
 samples_initial=reshape(samples_matrix, :)
@@ -43,6 +44,7 @@ samples_initial=reshape(samples_matrix, :)
 carrier_freqs = [22.728727738461984,26.20275686353819]
 # signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
+# signals_ = [DigitizedSignal([2π*0.02 for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals = MultiChannelSignal(signals_)
 
 
@@ -321,12 +323,12 @@ optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_final, opti
 samples_final = Optim.minimizer(optimization)
 
 
-# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_initial, optimizer, options)
-# samples_final = Optim.minimizer(optimization) 
-# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
-# samples_final = Optim.minimizer(optimization) 
-# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
-# samples_final = Optim.minimizer(optimization) 
+optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_initial, optimizer, options)
+samples_final = Optim.minimizer(optimization) 
+optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
+samples_final = Optim.minimizer(optimization) 
+optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
+samples_final = Optim.minimizer(optimization) 
 
 # optimization = Optim.optimize(costfunction_o, gradient_direct_exp!, samples_initial, optimizer, options)
 # samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
