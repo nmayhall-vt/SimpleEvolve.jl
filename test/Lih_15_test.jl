@@ -27,8 +27,8 @@ device = choose_qubits(1:n_qubits, Transmon(
     )
 ))
 
-T=15.0
-n_samples = 150
+T=25.0
+n_samples = 500
 δt = T/n_samples
 t_=collect(0:δt:T)
 
@@ -96,7 +96,7 @@ function gradient_ode!(Grad, samples)
 end
 
 # we have to optimize the samples in the signal
-n_samples_grad = Int(n_samples/10)
+n_samples_grad = Int(n_samples/20)
 δΩ_ = Matrix{Float64}(undef, n_samples+1, n_qubits)
 ∂Ω0 = Matrix{Float64}(undef, n_samples+1, n_qubits)
 
@@ -105,7 +105,7 @@ tol_ode=1e-10
 Grad = zeros(Float64, n_samples+1, n_qubits)
 grad_initial=gradient_ode!(Grad, samples_initial)
 display(grad_initial)
-plot(grad_initial[:,1], label="original signal", color=:black)
+plot(grad_initial[:,1], label="original signal", color=:black,linewidth=2)
 
 # gradientsignal for less no of samples
 δΩ = zeros(n_samples_grad+1,n_qubits)
