@@ -29,8 +29,8 @@ device = choose_qubits(1:n_qubits, Transmon(
     )
 ))
 
-T=15.0
-n_samples = 60
+T=20.0
+n_samples = 80
 δt = T/n_samples
 t_=collect(0:δt:T)
 # for i in 1:n_samples+1
@@ -218,7 +218,7 @@ end
 println("ode evolved energy is ",energy1)
 
 # trotter direct exponentiation evolution
-n_trotter_steps = n_samples
+n_trotter_steps = n_samples*10
 @time energy2,ψ_d = costfunction_direct_exponentiation(ψ_initial, eigvalues,eigvectors, signals, n_qubits, drives,Cost_ham, T;basis="qubitbasis", n_trotter_steps=n_trotter_steps)
 println("direct evolved energy is ",energy2)
 

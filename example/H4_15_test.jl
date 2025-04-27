@@ -24,7 +24,7 @@ device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
 T=25.0
-n_samples = 100
+n_samples = 125
 δt = T/n_samples
 t_=collect(0:δt:T)
 
@@ -144,10 +144,7 @@ function gradient_ode!(Grad, samples)
                             n_samples_grad,
                             ∂Ω0;
                             basis="qubitbasis",
-                            tol_ode=tol_ode,
-                            n_trotter_steps=n_trotter_steps,
-                            V = V,
-                            a=aq)
+                            tol_ode=tol_ode)
     for k in 1:n_qubits
         for i in 1:n_samples+1
             # considering the frequency remain as constants

@@ -22,8 +22,8 @@ for p in 1:n_qubits
 end
 device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
-T=25.0
-n_samples = 240
+T=30.0
+n_samples = 150
 δt = T/n_samples
 t_=collect(0:δt:T)
 
@@ -63,7 +63,7 @@ end
 
 
 # we have to optimize the samples in the signal
-n_samples_grad = Int(n_samples/4)
+n_samples_grad = Int(n_samples/3)
 δΩ_ = Matrix{Float64}(undef, n_samples+1, n_qubits)
 a=a_q(n_levels)
 tol_ode=1e-10

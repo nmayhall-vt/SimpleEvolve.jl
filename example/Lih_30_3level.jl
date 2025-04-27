@@ -29,7 +29,7 @@ device = choose_qubits(1:n_qubits, Transmon(
     )
 ))
 T=20.0
-n_samples = 50
+n_samples = 80
 δt = T/n_samples
 t_=collect(0:δt:T)
 
