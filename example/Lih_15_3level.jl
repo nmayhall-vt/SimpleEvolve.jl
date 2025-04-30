@@ -8,61 +8,49 @@ using ForwardDiff
 using ForwardDiff: GradientConfig, Chunk
 using Random
 
-Cost_ham = npzread("h215.npy") 
+Cost_ham = npzread("lih15.npy") 
 display(Cost_ham)
 n_qubits = round(Int, log2(size(Cost_ham,1)))
-n_levels = 2
-SYSTEM="h215"
-freqs = 2π*collect(4.8 .+ (0.02 * (1:n_qubits)))
-anharmonicities = 2π*0.3 * ones(n_qubits)
-coupling_map = Dict{QubitCoupling,Float64}()
-for p in 1:n_qubits
-    q = (p == n_qubits) ? 1 : p + 1
-    coupling_map[QubitCoupling(p,q)] = 2π*0.02
-end
-device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
+n_levels = 3
+SYSTEM="lih15"
+Π = projector(n_qubits, 2, n_levels)    
+Cost_ham = Hermitian(Π'*Cost_ham*Π)
+display(Cost_ham)
+device = choose_qubits(1:n_qubits, Transmon(
+    2π*[3.7, 4.2, 3.5, 4.0],                    # QUBIT RESONANCE FREQUENCIES
+    2π*[0.3, 0.3, 0.3, 0.3],                    # QUBIT ANHARMONICITIES
+    Dict{QubitCoupling,Float64}(                # QUBIT COUPLING CONSTANTS
+        QubitCoupling(1,2) => 2π*.018,
+        QubitCoupling(2,3) => 2π*.021,
+        QubitCoupling(3,4) => 2π*.020,
+        QubitCoupling(1,3) => 2π*.021,
+        QubitCoupling(2,4) => 2π*.020,
+        QubitCoupling(1,4) => 2π*.021,
+    )
+))
 
-
-T=10.0
-n_samples = 100
+T=20.0
+n_samples = 80
 δt = T/n_samples
 t_=collect(0:δt:T)
 # for i in 1:n_samples+1
 #     display(t_[i]) 
 # end
-
+carrier_freqs =[23.876104167282428,
+27.01769682087222,
+22.61946710584651,
+25.761059759436304]
 # INITIAL PARAMETERS
 # samples_matrix=[2π*sin(4π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
-samples_matrix=[sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits]
- 
+samples_matrix=[sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
 pulse_windows=range(0, T, length=n_samples+1)
 
 samples_initial=reshape(samples_matrix, :)
-# carrier_freqs = freqs
-# carrier_freqs = [30.207288739056587,30.48828132829821]#this does not work
 
-carrier_freqs = [22.728727738461984,26.20275686353819]
 # signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
-# signals_ = [DigitizedSignal([2π*0.02 for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals = MultiChannelSignal(signals_)
 
-
-# using NPZ
-# amp0=npzread("./pulses0_amp.npy")
-# sample_matrix=amp0
-# amp_vec= reshape(samples_matrix, :)
-# pulse_windows=range(0, T, length=n_samples+1)
-# samples_initial=amp_vec
-# # Build MultiChannelSignal
-# channels = [
-#     DigitizedSignal(
-#         sample_matrix[1:n_samples+1, i],  # Amplitude samples for channel i
-#         δt,
-#         carrier_freqs[i],   # Carrier frequency for channel i
-#     ) for i in 1:n_qubits
-# ]
-# multi_signal = MultiChannelSignal(channels)
 
 
 # initial state
@@ -230,7 +218,7 @@ end
 println("ode evolved energy is ",energy1)
 
 # trotter direct exponentiation evolution
-n_trotter_steps = n_samples
+n_trotter_steps = n_samples*10
 @time energy2,ψ_d = costfunction_direct_exponentiation(ψ_initial, eigvalues,eigvectors, signals, n_qubits, drives,Cost_ham, T;basis="qubitbasis", n_trotter_steps=n_trotter_steps)
 println("direct evolved energy is ",energy2)
 
@@ -323,12 +311,12 @@ optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_final, opti
 samples_final = Optim.minimizer(optimization)
 
 
-optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_initial, optimizer, options)
-samples_final = Optim.minimizer(optimization) 
-optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
-samples_final = Optim.minimizer(optimization) 
-optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
-samples_final = Optim.minimizer(optimization) 
+# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_initial, optimizer, options)
+# samples_final = Optim.minimizer(optimization) 
+# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
+# samples_final = Optim.minimizer(optimization) 
+# optimization = Optim.optimize(costfunction_t, gradient_rotate!, samples_final, optimizer, options)
+# samples_final = Optim.minimizer(optimization) 
 
 # optimization = Optim.optimize(costfunction_o, gradient_direct_exp!, samples_initial, optimizer, options)
 # samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS

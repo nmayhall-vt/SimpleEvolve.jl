@@ -24,14 +24,13 @@ export costfunction_ode
 export costfunction_direct_exponentiation
 export gradientsignal_ODE
 export gradientsignal_direct_exponentiation
-export gradientsignal_ODE
 export MultiChannelSignal
 export single_trotter_exponentiation_step
 export grad_signal_expansion
 export gradientsignal_rotate
 export trotter_evolve
 export costfunction_trotter
-export gradientsignal_rotate_ode
+export gradientsignal_finite_difference
 
 export static_hamiltonian
 export Transmon

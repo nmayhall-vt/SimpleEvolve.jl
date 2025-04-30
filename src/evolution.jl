@@ -26,7 +26,6 @@ function dψdt!(dψ,ψ,parameters,t)
     drives    = parameters[3]
     eigvalues = parameters[4]
     adjoint   = parameters[5]
-    eigvectors = parameters[6]
 
     dim= length(ψ)
     # println(t)
@@ -68,13 +67,13 @@ evolve_ODE(ψ0, T, signals, n_sites, drives, eigvalues; tol_ode=1e-8)
 
 """
 
-function evolve_ODE(ψ0,
-                    T,
+function evolve_ODE(ψ0::Vector{ComplexF64},
+                    T::Float64,
                     signals,
-                    n_sites,
+                    n_sites::Int64,
                     drives,
                     eigvalues,
-                    eigvectors;
+                    eigvectors::Matrix{ComplexF64};
                     basis = "eigenbasis",
                     tol_ode=1e-8)
 
@@ -82,19 +81,20 @@ function evolve_ODE(ψ0,
     if basis != "eigenbasis"
         ψ0 = eigvectors' * ψ0
     end
-    
+    tmp_ψ = zeros(ComplexF64, length(ψ0))
     ψ = copy(ψ0)
 
     #evolve the state with ODE
-    parameters = [signals, n_sites, drives, eigvalues,false, eigvectors]
+    parameters = [signals, n_sites, drives, eigvalues,false]
     prob = ODEProblem(dψdt!, ψ, (0.0,T), parameters)
-    sol = solve(prob, alg_hints = [:stiff]; reltol=tol_ode, abstol=tol_ode,save_everystep=false,maxiters=1e8)
+    sol = solve(prob; reltol=tol_ode, abstol=tol_ode,save_everystep=false,maxiters=1e8)
     
     ψ   .= sol.u[end]
     #normalize the states
     ψ .= ψ/norm(ψ)
-    # returning the final state in eigenbasis so during 
-    # computing expectation values we don't have to change basis
+    if basis != "eigenbasis" # rotating out of the eigenspace
+        ψ .= mul!(tmp_ψ, eigvectors, ψ)
+    end
     return ψ 
 
 end
@@ -116,13 +116,13 @@ evolve_direct_exponentiation(ψ0, T, signals, n_sites, drives, eigvalues, n_trot
 
 """
 
-function evolve_direct_exponentiation(ψ0,
-                                        T,
+function evolve_direct_exponentiation(ψ0::Vector{ComplexF64},
+                                        T::Float64,
                                         signals,
-                                        n_sites,
+                                        n_sites::Int64,
                                         drives,
                                         eigvalues,
-                                        eigvectors;
+                                        eigvectors::Matrix{ComplexF64};
                                         basis = "eigenbasis",
                                         n_trotter_steps=1000)
            
@@ -130,20 +130,21 @@ function evolve_direct_exponentiation(ψ0,
     if basis != "eigenbasis"
         ψ0 = eigvectors' * ψ0
     end
-    
+    tmp_ψ = zeros(ComplexF64, length(ψ0))
     ψ = copy(ψ0)
     t_series=range(0,T,n_trotter_steps+1)
     dt= T/n_trotter_steps
     #tmp_ψ = Vector{ComplexF64}(undef, length(ψ0))
     
     # time evolution with direct exponentiation
-    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues,eigvectors, dt/2,t_series[1])
-    for i in 2:n_trotter_steps
-        ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues,eigvectors, dt,t_series[i])
+    for i in 1:n_trotter_steps+1
+        ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, dt,t_series[i])
     end
-    ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues,eigvectors, dt/2,t_series[end])
     #normalize the states
     ψ .= ψ/norm(ψ)
+    if basis != "eigenbasis" # rotating out of the eigenspace
+        ψ .= mul!(tmp_ψ, eigvectors, ψ)
+    end
     return ψ
 end
 
@@ -165,7 +166,14 @@ single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, dt, t
 
 """
 
-function single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues,eigvectors, dt, t,adjoint=false)
+function single_trotter_exponentiation_step(ψ::Vector{ComplexF64},
+                                signals, 
+                                n_sites::Int64,
+                                drives,
+                                eigvalues,
+                                dt::Float64,
+                                t::Float64,
+                                adjoint=false)
     
     dim= length(ψ)
     H = zeros(ComplexF64, dim, dim)
@@ -206,16 +214,16 @@ function infidelity(ψ,φ)
 end
 
 
-function trotter_evolve(ψ0,
-                            T,
+function trotter_evolve(ψ0::Vector{ComplexF64},
+                            T::Float64,
                             signals,
-                            n_sites,
-                            n_levels,
-                            a_q,
+                            n_sites::Int64,
+                            n_levels::Int64,
+                            a_q::Matrix{Float64},
                             eigvalues,
-                            eigvectors;
+                            eigvectors::Matrix{ComplexF64};
                             basis = "eigenbasis",
-                            n_trotter_steps) 
+                            n_trotter_steps=1000) 
     # eigvalues, eigvecs = eigen(Hstatic)
     tmp_ψ = zeros(ComplexF64, length(ψ0))
     if basis == "eigenbasis" # rotating out of the eigenspace
@@ -234,7 +242,7 @@ function trotter_evolve(ψ0,
     ψ .= _step(ψ, t_[1], δt/2, signals, n_sites, a_q, tmp_ψ, tmpM_, tmpK_)
     transform!(ψ, V, tmp_ψ)
     for i ∈ (2:n_trotter_steps)
-        t_i = t_[i]-δt/2
+        t_i = t_[i]
         ψ .= _step(ψ, t_i, δt, signals, n_sites, a_q, tmp_ψ, tmpM_, tmpK_)
         transform!(ψ, V, tmp_ψ)                # transform!(σ, V, tmpV)=> σ=mul!(tmpV, V, σ) 
     end
@@ -245,14 +253,23 @@ function trotter_evolve(ψ0,
     ψ.*=exp.((im*T)*eigvalues)                 # rotate phases for final exp(iHDT)
     
     ψ ./= norm(ψ)
-    if basis == "eigenbasis" # rotating back to the eigenspace
+    if basis != "eigenbasis" # rotating out of the eigenspace
         ψ .= mul!(tmp_ψ, eigvectors, ψ)
     end
     return ψ
 end
 
 """ Auxiliary function to evolve a single step in time. """
-function _step(ψ, t, τ, signals,n_qubits, a, tmpV, tmpM_, tmpK_, adjoint=false)
+function _step(ψ::Vector{ComplexF64},
+            t::Float64,
+            τ::Float64,
+            signals,
+            n_qubits::Int64, 
+            a::Matrix{Float64},
+            tmpV::Vector{ComplexF64},
+            tmpM_::Vector{Matrix{ComplexF64}},
+            tmpK_::Vector{Matrix{ComplexF64}},
+            adjoint=false)
    
     for q ∈ 1:n_qubits
         Ω = amplitude(signals.channels[q], t)

@@ -17,7 +17,7 @@ a_q(n_levels)
 
 """
 # bosonic annhilation operator 
-function a_q(n_levels)
+function a_q(n_levels::Integer)
     a = zeros((n_levels,n_levels))
     for i ∈ 1:n_levels-1
         a[i,i+1] = √i            
