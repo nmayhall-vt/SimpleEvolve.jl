@@ -87,7 +87,7 @@ function evolve_ODE(ψ0::Vector{ComplexF64},
     #evolve the state with ODE
     parameters = [signals, n_sites, drives, eigvalues,false]
     prob = ODEProblem(dψdt!, ψ, (0.0,T), parameters)
-    sol = solve(prob; reltol=tol_ode, abstol=tol_ode,save_everystep=false,maxiters=1e8)
+    sol = solve(prob,RK4(), reltol=tol_ode, abstol=tol_ode,save_everystep=false,maxiters=1e8)
     
     ψ   .= sol.u[end]
     #normalize the states

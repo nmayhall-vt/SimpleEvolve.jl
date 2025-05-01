@@ -22,7 +22,7 @@ function energy()
     device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
-    T=10
+    T=10.0
     n_samples = 1000
     δt = T/n_samples
 
@@ -54,7 +54,7 @@ function energy()
     println("Eignvalues of our static Hamiltonian")
     display(eigvalues)
 
-    tol_ode=1e-10
+    tol_ode=1e-6
     Λ, U = eigen(Cost_ham)
     E_actual = Λ[1]
     println("Actual energy: $E_actual") 
@@ -73,7 +73,7 @@ function energy()
     ∂Ω0 = Matrix{Float64}(undef, n_samples_grad+1, n_qubits)
     τ = T/n_samples_grad
     a=a_q(n_levels)
-    tol_ode=1e-10
+    tol_ode=1e-6
 
 
 

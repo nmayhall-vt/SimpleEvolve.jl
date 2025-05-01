@@ -51,7 +51,7 @@ function gradientsignal_ODE(ψ0::Vector{ComplexF64},
     #evolve the sigma state with ODE in forward direction
     parameters = [signals, n_sites, drives,eigvalues,false]
     prob = ODEProblem(dψdt!, σ, (0.0,T), parameters)
-    sol  = solve(prob, abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
+    sol  = solve(prob,RK4(), abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
     σ .= sol.u[end]
     σ .= σ /norm(σ)
     
@@ -66,7 +66,7 @@ function gradientsignal_ODE(ψ0::Vector{ComplexF64},
     parameters = [signals, n_sites, drives,eigvalues,false]# this should be false 
     # I have checked this by passing constant pulse
     prob_ = ODEProblem(dψdt!, σ, (T,0.0), parameters)
-    sol_  = solve(prob_,alg_hints = [:stiff], abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
+    sol_  = solve(prob_,RK4(), abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
     σ .= sol_.u[end]
     σ .= σ /norm(σ)
 
@@ -78,11 +78,11 @@ function gradientsignal_ODE(ψ0::Vector{ComplexF64},
         gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,t_i,i)
         parameters = [signals, n_sites, drives, eigvalues,false]
         prob_ψ = ODEProblem(dψdt!, ψ, (t_i, t_f), parameters)
-        sol_ψ = solve(prob_ψ,alg_hints = [:stiff],abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
+        sol_ψ = solve(prob_ψ,RK4(),abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
         ψ .= sol_ψ.u[end]
 
         prob_σ = ODEProblem(dψdt!, σ, (t_i, t_f), parameters)
-        sol_σ  = solve(prob_σ,alg_hints = [:stiff], abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
+        sol_σ  = solve(prob_σ,RK4(), abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
         σ .= sol_σ.u[end]
     
     end

@@ -57,7 +57,7 @@ eigvalues, eigvectors = eigen(Hermitian(H_static))  # Ensures real eigenvalues
 println("Eignvalues of our static Hamiltonian")
 display(eigvalues)
 
-tol_ode=1e-10
+tol_ode=1e-6
 Λ, U = eigen(Cost_ham)
 E_actual = Λ[1]
 println("Actual energy: $E_actual") 
@@ -93,35 +93,6 @@ n_samples_grad = n_samples
 ∂Ω0 = Matrix{Float64}(undef, n_samples_grad+1, n_qubits)
 τ = T/n_samples_grad
 a=a_q(n_levels)
-tol_ode=1e-10
-
-function gradient_rotate_alternate!(Grad, samples)
-    Grad = reshape(Grad, :, n_qubits)
-    samples = reshape(samples, n_samples+1, n_qubits)
-    signals_= [DigitizedSignal(samples[:,i], δt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
-    signals= MultiChannelSignal(signals_)
-    grad_ode,ψ_rotate, σ_rotate =SimpleEvolve.gradientsignal_rotate_alternate(ψ_initial,
-                            T,
-                            signals,
-                            n_qubits,
-                            n_levels,
-                            a,
-                            eigvalues,
-                            eigvectors,
-                            Cost_ham,
-                            n_samples_grad,
-                            ∂Ω0;
-                            basis="qubitbasis",
-                            n_trotter_steps=n_trotter_steps)
-
-    for k in 1:n_qubits
-        for i in 1:n_samples+1
-            # considering the frequency remain as constants
-            Grad[i,k] = grad_ode[i,k] 
-        end
-    end
-    return Grad, ψ_rotate, σ_rotate
-end
 
 function gradient_rotate!(Grad, samples)
     Grad = reshape(Grad, :, n_qubits)
@@ -175,31 +146,7 @@ function gradient_ode!(Grad, samples)
     end
     return Grad, ψ_ode, σ_ode
 end
-function gradient_ode_alternate!(Grad, samples)
-    Grad = reshape(Grad, :, n_qubits)
-    samples = reshape(samples, n_samples+1, n_qubits)
-    signals_= [DigitizedSignal(samples[:,i], δt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
-    signals= MultiChannelSignal(signals_)
-    grad_ode, ψ_ode_new, σ_ode_new =SimpleEvolve.gradientsignal_ODE_alternative(ψ_initial,
-                            T,
-                            signals,
-                            n_qubits,
-                            drives,
-                            eigvalues,
-                            eigvectors,
-                            Cost_ham,
-                            n_samples_grad,
-                            ∂Ω0;
-                            basis="qubitbasis",
-                            tol_ode=tol_ode)
-    for k in 1:n_qubits
-        for i in 1:n_samples+1
-            # considering the frequency remain as constants
-            Grad[i,k] = grad_ode[i,k] 
-        end
-    end
-    return Grad, ψ_ode_new, σ_ode_new
-end
+
 
 function gradient_direct_exp!(Grad, samples)
     Grad = reshape(Grad, :, n_qubits)
@@ -282,11 +229,6 @@ grad_initial_direct, ψ_direct, σ_direct=gradient_direct_exp!(Grad, samples_ini
 Grad = zeros(Float64, n_samples+1, n_qubits)
 grad_initial_fd=gradient_fd!(Grad, samples_initial)
 display(grad_initial_fd)
-# display(ψ_ode)
-# Grad = zeros(Float64, n_samples+1, n_qubits)
-# grad_initial_ode_new, ψ_ode_new, σ_ode_new=gradient_ode_alternate!(Grad, samples_initial)
-# Grad = zeros(Float64, n_samples+1, n_qubits)
-# grad_initial_rotate_alternate, ψ_rotate_alternate, σ_rotate_alternate=gradient_rotate_alternate!(Grad, samples_initial)
 
 println("infidelity between the ode and direct exponentiation state")
 display(infidelity(ψ_ode,ψ_direct))
@@ -294,13 +236,6 @@ println("infidelity between the ode and rotate trotter exponentiation state")
 display(infidelity(ψ_ode,ψ_rotate))
 println("infidelity between the direct and rotate trotter exponentiation state")
 display(infidelity(ψ_direct,ψ_rotate))
-
-# println("infidelity between the ode alternate and trotter alternate state")
-# display(infidelity(ψ_ode_new,ψ_rotate_alternate))
-# println("infidelity between the ode and rotate trotter alternate state")
-# display(infidelity(σ_ode_new,σ_rotate_alternate))
-# println("Norm of difference between gradient rotate and ode")
-# display(norm(grad_initial_rotate_alternate-grad_initial_ode_new))
 
 println("infidelity between the ode and direct exponentiation sigma state")
 display(infidelity(σ_ode,σ_direct))

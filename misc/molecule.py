@@ -145,9 +145,9 @@ def h2o(dist_oh=0.96, angle_hoh=104.5):
     
     # Freeze core orbitals using ActiveSpaceTransformer
     transformer = ActiveSpaceTransformer(
-    num_electrons=6,          # Total electrons: 10-4 = 6e⁻
-    num_spatial_orbitals=5,   # Total orbitals: 7 - 2 (frozen) = 5
-    active_orbitals=[2,3,4,5,6])  # Keep orbitals 2-6 (exclude 0,1))
+    num_electrons=8,          # Total electrons: 10-4 = 6e⁻
+    num_spatial_orbitals=6,   # Total orbitals: 7 - 2 (frozen) = 5
+    active_orbitals=[1,2,3,4,5,6])  # Keep orbitals 2-6 (exclude 0,1))
     problem_reduced = transformer.transform(problem)
     
     # Get Hamiltonian (already includes nuclear repulsion energy)
@@ -193,14 +193,14 @@ def beh2(dist_BeH=1.33):
     
     return qubit_op.to_matrix()
 # Example usage
-h2o_ham = h2o()
+h2o_ham_10 = h2o()
 print("H2O Hamiltonian matrix:")
-print(h2o_ham)
-print(np.shape(h2o_ham))
+print(h2o_ham_10)
+print(np.shape(h2o_ham_10))
 
-ground_state_energy = eig(h2o_ham)[0][0]
-print(ground_state_energy)
-np.save('h2o_ham.npy', h2o_ham)
+# ground_state_energy = eig(h2o_ham)[0][0]
+# print(ground_state_energy)
+np.save('h2o_ham_10.npy', h2o_ham_10)
 beh2_ham=beh2(1.33)
 print(beh2_ham)
 print(np.shape(beh2_ham))
