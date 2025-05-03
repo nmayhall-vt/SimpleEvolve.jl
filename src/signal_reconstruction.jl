@@ -358,7 +358,7 @@ end
 
 function reconstruct_gradient_hybrid(signal::DigitizedSignal,
                                     output_samples::Int;
-                                    secondary_method=:cubic_spline,
+                                    secondary_method=:whittaker_shannon,
                                     weight=0.5,
                                     poly_order=4,
                                     window_radius=8,
@@ -495,8 +495,9 @@ function reconstruct(signal::DigitizedSignal,
     new_times = range(0, (length(signal.samples)-1)*signal.δt, length=output_samples)
     
     if method == :whittaker_shannon
-        # return reconstruct_gradient_ws(signal, output_samples)
         return [amplitude_ws(signal, t) for t in new_times]
+    elseif method == :whittaker_shannon_lowpass
+        return reconstruct_gradient_ws(signal, output_samples)
     elseif method == :linear
         return [amplitude_linear(signal, t) for t in new_times]
     elseif method == :polynomial
@@ -521,4 +522,3 @@ function reconstruct(signal::DigitizedSignal,
         """))
     end
 end
-

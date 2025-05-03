@@ -33,7 +33,7 @@ function gradientsignal_ODE(ψ0::Vector{ComplexF64},
                             ∂Ω=Matrix{Float64}(undef,n_signals+1,n_sites);
                             basis = "eigenbasis",
                             tol_ode=1e-8,
-                            n_levels=2) 
+                            τ = T/n_signals) 
 
     # eigvalues, eigvecs = eigen(Hstatic)
     tmp_σ = zeros(ComplexF64, length(ψ0))
@@ -75,7 +75,7 @@ function gradientsignal_ODE(ψ0::Vector{ComplexF64},
 
         t_i = t_[i]
         t_f = t_[i]+δt
-        gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,t_i,i)
+        gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,t_i,i,τ)
         parameters = [signals, n_sites, drives, eigvalues,false]
         prob_ψ = ODEProblem(dψdt!, ψ, (t_i, t_f), parameters)
         sol_ψ = solve(prob_ψ,RK4(),abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
@@ -86,7 +86,7 @@ function gradientsignal_ODE(ψ0::Vector{ComplexF64},
         σ .= sol_σ.u[end]
     
     end
-    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,(t_[end]),n_signals+1)
+    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,(t_[end]),n_signals+1,τ)
     
     σ .= σ /norm(σ)
     ψ .= ψ /norm(ψ)
@@ -128,7 +128,8 @@ function gradient_eachtimestep!(∂Ω,
                                 drives::Vector{Matrix{Float64}},
                                 eigvalues::Vector{Float64},
                                 t::Float64,
-                                time_index::Int64)
+                                time_index::Int64,
+                                τ::Float64)
     
     dim= length(ψ)
     dH_dΩ = zeros(ComplexF64, dim, dim)
@@ -149,8 +150,9 @@ function gradient_eachtimestep!(∂Ω,
         
         AΨ = dH_dΩ * ψ0
         # calculate gradient ⟨σ|A|ψ⟩
-        σAψ = -im * (σ0' * AΨ)
-        # σAψ = -im * (σ' * AΨ)*    multi_signal.channels[k].δt  
+        # σAψ = -im * (σ0' * AΨ)
+        σAψ = -im * (σ' * AΨ)*    τ # this tau is generally equal to signals dt , 
+        # but for signal reconstruction we need to use τ=T/n_signals not τ=T/n_samples_grad
 
         # ⟨σ|A|ψ⟩ + ⟨ψ|A|σ⟩ 
         ∂Ω[time_index,k] = σAψ + σAψ'                      
@@ -192,7 +194,8 @@ function gradientsignal_direct_exponentiation(ψ0::Vector{ComplexF64},
                                         n_signals::Int64,
                                         ∂Ω = Matrix{Float64}(undef, n_signals+1, n_sites);
                                         basis = "eigenbasis",
-                                        n_trotter_steps=1000)
+                                        n_trotter_steps=1000,
+                                        τ = T/n_signals)
            
     # eigvalues, eigvecs = eigen(Hstatic)
     if basis != "eigenbasis"
@@ -231,11 +234,11 @@ function gradientsignal_direct_exponentiation(ψ0::Vector{ComplexF64},
     σ .= σ /norm(σ)
     #calculating gradient by evolving both ψ and σ states
     for i in 1:n_signals+1
-        gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,t_[i],i)
+        gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,t_[i],i,τ)
         ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, Δt,t_[i])
         σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, Δt,t_[i])
     end
-    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,t_series[end],n_signals+1)
+    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,t_series[end],n_signals+1,τ)
   
     ψ .= ψ/norm(ψ)
     σ .= σ/norm(σ)

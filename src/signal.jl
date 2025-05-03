@@ -76,3 +76,18 @@ function Base.copy(mcs::MultiChannelSignal{T}) where T
     ]
     return MultiChannelSignal{T}(copied_channels)
 end
+
+"""
+The idea is that a partial derivative ∂signal(t)/∂sample[j] 
+as being non-zero only at times where t ≈ j * δt."""
+
+function signalgradient_amplitude(t, j, signal::DigitizedSignal)
+    i = j  # interpret j as a sample index now
+    sample_time = (i - 1) * signal.δt
+    
+    if abs(t - sample_time) < signal.δt/2
+        return 1.0  # The gradient at that point w.r.t sample j
+    else
+        return 0.0  # No contribution from sample j
+    end
+end
