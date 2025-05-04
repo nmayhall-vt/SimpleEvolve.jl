@@ -49,6 +49,7 @@ function amplitude_ws(signal::DigitizedSignal, t; window_radius=8)
         # Accumulate weighted sample contribution
         sum_val += signal.samples[n] * sinc_val * window_val
     end
+  
     return sum_val
 end
 
@@ -131,7 +132,7 @@ function whittaker_shannon_fft(x::Vector{T}, output_length::Int) where T<:Real
 end
 
 """
-lowpasss(signal::Vector{T}, cutoff::Real, fs::Real)
+lowpass(signal::Vector{T}, cutoff::Real, fs::Real)
     Lowpass filter a signal using a FIR filter
     Args:
         signal: Input signal
@@ -495,7 +496,17 @@ function reconstruct(signal::DigitizedSignal,
     new_times = range(0, (length(signal.samples)-1)*signal.δt, length=output_samples)
     
     if method == :whittaker_shannon
-        return [amplitude_ws(signal, t) for t in new_times]
+        upsampled=[amplitude_ws(signal, t;window_radius=window_radius) for t in new_times]
+        original_samples = length(signal.samples)
+        δt_original = signal.δt
+        new_δt = δt_original * (original_samples/output_samples)
+        # Anti-aliasing filter parameters
+        original_nyquist = 1/(2δt_original) # Critical cutoff frequency
+        new_fs = 1/new_δt 
+        # Apply FIR lowpass filter
+        filtered = lowpass(upsampled, original_nyquist, new_fs)
+        return filtered
+
     elseif method == :whittaker_shannon_lowpass
         return reconstruct_gradient_ws(signal, output_samples)
     elseif method == :linear

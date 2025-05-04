@@ -82,7 +82,7 @@ function costfunction_ode_with_penalty(ψ0::Vector{ComplexF64},
                          Cost_ham;
                          basis = "eigenbasis",
                          tol_ode=1e-8,
-                         λ::Float64=0.1,
+                         λ::Float64=1.0,
                          Ω₀::Float64=1.0+2π+0.02) 
 
     # Evolve the state using ODE
@@ -108,7 +108,7 @@ end
 We can use this function in the script directly for gradient with penalty 
 =#
 
-function gradient_ode_opt!(Grad, samples; λ=0.1, Ω₀=1.0+2π+0.02)
+function gradient_ode_opt!(Grad, samples; λ=1.0, Ω₀=1.0+2π+0.02)
     Grad = reshape(Grad, :, n_qubits)
     samples = reshape(samples, n_samples+1, n_qubits)
 
@@ -160,7 +160,7 @@ end
 #=
 We can use this function in the script directly for costfunction with penalty 
 =#
-function costfunction_o_opt(samples; λ=0.1, Ω₀=1.0+2π+0.02)
+function costfunction_o_opt(samples; λ=1.0, Ω₀=1.0+2π+0.02)
     # Reshape the flat vector into (n_samples+1) × n_qubits
     samples = reshape(samples, n_samples+1, n_qubits)
 
