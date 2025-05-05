@@ -144,10 +144,11 @@ lowpass(signal::Vector{T}, cutoff::Real, fs::Real)
 
 """
 
-function lowpass(signal::Vector{T}, cutoff::Real, fs::Real) where T<:Real
+function lowpass(signal::Vector{T}, cutoff::Real, fs::Real;hanning_window=51) where T<:Real
     nyquist = fs/2
     normalized_cutoff = cutoff/nyquist
-    fir = digitalfilter(Lowpass(normalized_cutoff), FIRWindow(hanning(51)))
+    fir = digitalfilter(Lowpass(normalized_cutoff), FIRWindow(hanning(hanning_window)))
+    # println(size(fir))
     return filtfilt(fir, signal)  # Zero-phase filtering
 end
 
@@ -449,6 +450,7 @@ function validate_and_expand(δΩ_,
                             weights=0.5,
                             poly_order=4,
                             window_radius=8,
+                            hanning_window=51,
                             filter_cutoff_ratio=0.8)
     # Validate input dimensions
     @assert size(grad_ode, 1) == n_grad_signals + 1 "Input matrix must have n_grad_signals+1 rows"
@@ -463,6 +465,7 @@ function validate_and_expand(δΩ_,
                                 weight=weights,
                                 poly_order=poly_order,
                                 window_radius=window_radius,
+                                hanning_window=hanning_window,
                                 filter_cutoff_ratio=filter_cutoff_ratio)
     end
     return δΩ_
@@ -492,6 +495,7 @@ function reconstruct(signal::DigitizedSignal,
                     weight=0.5,
                     poly_order=4,
                     window_radius=8,
+                    hanning_window=51,
                     filter_cutoff_ratio=0.8)
     new_times = range(0, (length(signal.samples)-1)*signal.δt, length=output_samples)
     
@@ -503,8 +507,9 @@ function reconstruct(signal::DigitizedSignal,
         # Anti-aliasing filter parameters
         original_nyquist = 1/(2δt_original) # Critical cutoff frequency
         new_fs = 1/new_δt 
+        # println(upsampled)
         # Apply FIR lowpass filter
-        filtered = lowpass(upsampled, original_nyquist, new_fs)
+        filtered = lowpass(upsampled, original_nyquist, new_fs;hanning_window=hanning_window)
         return filtered
 
     elseif method == :whittaker_shannon_lowpass

@@ -24,8 +24,8 @@ end
 device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
-T=40.0
-n_samples = 40
+T=20.0
+n_samples = 400
 δt = T/n_samples
 t_=collect(0:δt:T)
 
@@ -64,7 +64,7 @@ for i in 1:n_qubits
 end
 
 # we have to optimize the samples in the signal
-n_samples_grad = n_samples
+n_samples_grad = Int(n_samples/2)
 δΩ_ = Matrix{Float64}(undef, n_samples+1, n_qubits)
 a=a_q(n_levels)
 tol_ode=1e-6
@@ -80,7 +80,7 @@ dt=T/n_samples_grad
 function gradient_ode!(Grad, samples)
     Grad = reshape(Grad, :, n_qubits)
     samples = reshape(samples, n_samples+1, n_qubits)
-    signals_= [DigitizedSignal(samples[:,i],dt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
+    signals_= [DigitizedSignal(samples[1:Int(round(dt/δt)):end,i],dt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
     signals= MultiChannelSignal(signals_)
     grad_ode,ψ_ode, σ_ode =SimpleEvolve.gradientsignal_ODE(ψ_initial,
                             T,
@@ -93,11 +93,23 @@ function gradient_ode!(Grad, samples)
                             n_samples_grad,
                             δΩ;
                             basis="qubitbasis",
-                            tol_ode=tol_ode)
+                            tol_ode=tol_ode,
+                            τ=δt)
+
+    grad_ode_expanded =validate_and_expand(δΩ_,grad_ode,
+                                            n_samples_grad,
+                                            n_samples,
+                                            n_qubits, 
+                                            T, 
+                                            carrier_freqs,
+                                            :whittaker_shannon,
+                                            window_radius=5,
+                                            hanning_window=5)
+                                            
     for k in 1:n_qubits
         for i in 1:n_samples+1
             # considering the frequency remain as constants
-            Grad[i,k] = grad_ode[i,k] 
+            Grad[i,k] = grad_ode_expanded[i,k] 
         end
     end
     return Grad
