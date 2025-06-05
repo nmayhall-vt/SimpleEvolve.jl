@@ -72,7 +72,7 @@ function gradientsignal_ODE(ψ0::Vector{ComplexF64},
 
     #calculating gradient by evolving both ψ and σ states
     for i ∈ (1:n_signals)
-
+        # display(i)
         t_i = t_[i]
         t_f = t_[i]+δt
         gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,t_i,i,τ)
@@ -151,7 +151,7 @@ function gradient_eachtimestep!(∂Ω,
         AΨ = dH_dΩ * ψ0
         # calculate gradient ⟨σ|A|ψ⟩
         # σAψ = -im * (σ0' * AΨ)
-        σAψ = -im * (σ' * AΨ)*    τ # this tau is generally equal to signals dt , 
+        σAψ = -im * (σ' * AΨ)*τ # this tau is generally equal to signals dt , 
         # but for signal reconstruction we need to use τ=T/n_signals not τ=T/n_samples_grad
 
         # ⟨σ|A|ψ⟩ + ⟨ψ|A|σ⟩ 
