@@ -1,4 +1,6 @@
 using Statistics
+abstract type AbstractSignalGenerator end
+
 """
     DigitizedSignal 
     A struct to represent a digitized signal with samples, time step, and carrier frequency.
@@ -6,7 +8,7 @@ using Statistics
 """
 
 
-struct DigitizedSignal{T}
+struct DigitizedSignal{T}<: AbstractSignalGenerator
     samples::Vector{T}
     δt::Float64
     carrier_freq::Float64
@@ -19,8 +21,8 @@ end
     A struct to represent a multi-channel signal with multiple digitized signals.
 
 """
-struct MultiChannelSignal{T}
-    channels::Vector{DigitizedSignal{T}}
+struct MultiChannelSignal
+    channels::Vector{<:AbstractSignalGenerator}
 end
 
 function amplitude(signal::DigitizedSignal, t)
@@ -65,18 +67,18 @@ function grad_signal_expansion(δΩ_,
 end
 
 
-function Base.copy(mcs::MultiChannelSignal{T}) where T
-    # Create copies of each DigitizedSignal channel with copied samples
-    copied_channels = [
-        DigitizedSignal(
-            copy(ch.samples),  # Copies the samples vector to prevent mutation side effects
-            ch.δt,             # Float64 is immutable; no copy needed
-            ch.carrier_freq    # Float64 is immutable; no copy needed
-        ) 
-        for ch in mcs.channels
-    ]
-    return MultiChannelSignal{T}(copied_channels)
-end
+# function Base.copy(mcs::MultiChannelSignal{T}) where T
+#     copied_channels = [
+#         DigitizedSignal(
+#             copy(ch.samples),  # Explicitly copy the samples vector
+#             ch.δt,             # δt is Float64 (immutable, no need to copy)
+#             ch.carrier_freq    # carrier_freq is Float64 (immutable)
+#         ) 
+#         for ch in mcs.channels
+#     ]
+#     return MultiChannelSignal(copied_channels)  
+# end
+
 
 """
 The idea is that a partial derivative ∂signal(t)/∂sample[j] 
@@ -94,7 +96,7 @@ function signalgradient_amplitude(t, j, signal::DigitizedSignal)
 end
 
 
-struct WindowedSquareWave{T<:Number}
+struct WindowedSquareWave{T<:Number}<: AbstractSignalGenerator
     frequency::Float64
     duty_cycle::Float64
     window_amplitudes::Vector{T}  
@@ -108,7 +110,7 @@ function WindowedSquareWave(frequency, duty_cycle, window_amplitudes, window_dur
     WindowedSquareWave{T}(frequency, duty_cycle, window_amplitudes, window_durations, cumulative_times)
 end
 
-function value_at(sw::WindowedSquareWave{T}, t::Float64) where T<:Number
+function amplitude(sw::WindowedSquareWave{T}, t::Float64) where T<:Number
     window_idx = searchsortedlast(sw.cumulative_times, t)
     amplitude = window_idx > length(sw.window_amplitudes) ? zero(T) : sw.window_amplitudes[window_idx]
     
@@ -116,8 +118,15 @@ function value_at(sw::WindowedSquareWave{T}, t::Float64) where T<:Number
     phase = mod(t, period)
     return phase < sw.duty_cycle * period ? amplitude : zero(T)
 end
+function frequency(sw::WindowedSquareWave, t::Float64)
+    return sw.frequency
+end
 
-struct WindowedGaussianPulse{T<:Number}
+"""
+    WindowedGaussianPulse(amplitudes, centers, widths, frequencies)
+    Create a windowed Gaussian pulse with specified amplitudes, centers, widths, and frequencies.
+"""
+struct WindowedGaussianPulse{T<:Number}<: AbstractSignalGenerator
     amplitudes::Vector{T}      # Amplitude for each window (can be complex)
     centers::Vector{Float64}   # Center time for each Gaussian window
     widths::Vector{Float64}    # Width (σ) for each Gaussian window
@@ -125,12 +134,12 @@ struct WindowedGaussianPulse{T<:Number}
 end
 
 function WindowedGaussianPulse(amplitudes, centers, widths, frequencies)
-    @assert length(amplitudes) == length(centers) == length(widths) == length(frequencies)
+    @assert length(centers) == length(widths) == length(frequencies)
     T = promote_type(eltype(amplitudes), Float64)
     WindowedGaussianPulse{T}(amplitudes, centers, widths, frequencies)
 end
 
-function value_at(pulse::WindowedGaussianPulse, t::Float64)
+function amplitude(pulse::WindowedGaussianPulse, t::Float64)
     s = zero(eltype(pulse.amplitudes))
     for i in eachindex(pulse.amplitudes)
         # Gaussian envelope * complex exponential for frequency
@@ -138,4 +147,7 @@ function value_at(pulse::WindowedGaussianPulse, t::Float64)
              exp(im * 2π * pulse.frequencies[i] * (t - pulse.centers[i]))
     end
     return s
+end
+function frequency(pulse::WindowedGaussianPulse, t::Float64)
+    return pulse.frequencies[1]
 end

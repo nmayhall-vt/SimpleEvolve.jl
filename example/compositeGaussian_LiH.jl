@@ -26,7 +26,8 @@ carrier_freqs = freqs.-2π*0.1
 T=20.0
 n_samples = 200
 δt = T/n_samples
-
+τ = δt
+t = 0:τ:T
 function costfunction_o(samples::Vector{Float64})
     # Split real vector into real and imaginary components
     n = length(samples) ÷ 2
@@ -114,52 +115,48 @@ display(eigvalues)
 E,ϕ=eigen(Cost_ham )
 println("FCI energy: ", E[1])
 
-# Complex-amplitude windowed square wave parameters
-n_windows = 40
-Random.seed!(42)
-window_amplitudes = [
-    complex.(2 .* rand(n_windows) .- 1, 2 .* rand(n_windows) .- 1) 
-    for _ in 1:n_qubits  
+n_windows = 5
+centers = LinRange(T/(n_windows+1), T-T/(n_windows+1), n_windows)
+widths = fill(T/(6n_windows), n_windows)
+amplitudes = complex.(2 .* rand(n_windows) .- 1, 2 .* rand(n_windows) .- 1)  
+frequencies_1 = carrier_freqs[1] * ones(n_windows)  # Constant frequency for all windows
+frequencies_2 = carrier_freqs[2] * ones(n_windows)  
+frequencies_3 = carrier_freqs[3] * ones(n_windows)  
+frequencies_4 = carrier_freqs[4] * ones(n_windows)
+pulse_1 = SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, frequencies_1)
+pulse_2 = SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, frequencies_2)
+pulse_3 = SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, frequencies_3)
+pulse_4 = SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, frequencies_4)
+
+samples_1 = [SimpleEvolve.amplitude(pulse_1, τ) for τ in t]
+samples_2 = [SimpleEvolve.amplitude(pulse_2, τ) for τ in t]
+samples_3 = [SimpleEvolve.amplitude(pulse_3, τ) for τ in t]
+samples_4 = [SimpleEvolve.amplitude(pulse_4, τ) for τ in t]
+plot(t, real.(samples_1), label="Real pulse 1",color=:blue)
+plot!(t, imag.(samples_1), label="Imag pulse 1", color=:orange)
+plot!(t, real.(samples_2), label="Real Pulse 2", color=:red, linewidth=1.5)
+plot!(t, imag.(samples_2), label="Imag Pulse 2", color=:green)
+plot!(t, real.(samples_3), label="Real Pulse 3", color=:purple, linewidth=1.5)
+plot!(t, imag.(samples_3), label="Imag Pulse 3", color=:brown)
+plot!(t, real.(samples_4), label="Real Pulse 4", color=:cyan, linewidth=1.5)
+plot!(t, imag.(samples_4), label="Imag Pulse 4", color=:magenta)
+xlabel!("Time")
+ylabel!("Amplitude")
+title!("Windowed Gaussian Pulse with Frequency")
+savefig("windowed_gaussian_pulses_$(system).pdf")
+# Create WindowedGaussianPulse objects
+signals_ =[
+    SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, frequencies_1),
+    SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, frequencies_2),
+    SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, frequencies_3),
+    SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, frequencies_4)
 ]
-# window_amplitudes = [
-#     [0.1 * exp(-(t/T)^2) * (1 + 0.5im * sin(2π*t/T)) for t in LinRange(0, T, n_windows)]
-#     for _ in 1:n_qubits
-# ]
-window_durations = [fill(T/n_windows, n_windows) for _ in 1:n_qubits]
-frequencies = carrier_freqs
-duty_cycles = Vector{Float64}(undef, n_qubits)
-for i in 1:n_qubits
-    duty_cycles[i] = 1.0  # Set duty cycle to 1.0 for all qubits
-end
-
-# Create WindowedSquareWave objects
-sw_complex = [
-    WindowedSquareWave(
-        frequencies[q],
-        duty_cycles[q],
-        window_amplitudes[q],  # Now a vector
-        window_durations[q]
-    ) for q in 1:n_qubits
+signals= MultiChannelSignal(signals_)
+wGP_samples = [
+    [SimpleEvolve.amplitude(signals_[q], τ) for τ in t] for q in 1:n_qubits
 ]
+samples_matrix = hcat(wGP_samples...)
 
-
-# Generate complex samples for each qubit
-t= collect(0:δt:T)
-samples_complex = [
-    [SimpleEvolve.amplitude(sw_complex[q], δt) for δt in t] for q in 1:n_qubits
-]
-
-samples_matrix = hcat(samples_complex...) 
-
-# Build MultiChannelSignal with complex windowed pulses
-channels = [
-    DigitizedSignal(
-        samples_matrix[:, q],  # Complex samples for channel q
-        δt,
-        carrier_freqs[q]
-    ) for q in 1:n_qubits
-]
-signals = MultiChannelSignal(channels)
 
 # Plot real and imaginary parts
 pulse_windows = range(0, T, length=n_samples+1)
@@ -208,19 +205,10 @@ println("Minimum cost: ", result.minimum)
 # println("Optimized samples:")
 # println(Ω_opt)
 #plot final signals
-final_signals = [
-    WindowedSquareWave(
-        carrier_freqs[q],
-        1.0,  # Duty cycle
-        Ω_opt[:, q], 
-        fill(T/n_samples, size(Ω_opt, 1)) 
-    ) for q in 1:n_qubits
-]
+
 
 # Plot optimized signals
-final_samples = [
-    [SimpleEvolve.amplitude(final_signals[q], δt) for δt in t] for q in 1:n_qubits
-]
+final_samples = [Ω_opt[:, q] for q in 1:n_qubits]
 final_samples_matrix = hcat(final_samples...)
 final_Ω_plots = plot(
     [plot(pulse_windows, real.(final_samples_matrix[:, q]), title="Qubit $q (Real)") for q in 1:n_qubits]...,
@@ -231,4 +219,4 @@ final_Ω_plots_imag = plot(
     layout=(n_qubits, 1), legend=false
 )
 plot(final_Ω_plots, final_Ω_plots_imag, layout=(1, 2))
-savefig("optimized_complex_windowed_pulses_$(system).pdf")
+savefig("optimized_complex_windowed_gaussian_pulses_$(system).pdf")

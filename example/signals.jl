@@ -27,7 +27,7 @@ sw = WindowedSquareWave(
 # Generate samples
 δt = T/(10*n_points)  # 10x oversampling
 t = 0:δt:T
-samples_initial = [value_at(sw, τ) for τ in t]
+samples_initial = [SimpleEvolve.amplitude(sw, τ) for τ in t]
 
 # Plot (real and imaginary components)
 using Plots
@@ -55,8 +55,8 @@ pulse_1 = SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, freque
 pulse_2 = SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, frequencies_2)
 δt = 0.01
 t = 0:δt:T
-samples_1 = [SimpleEvolve.value_at(pulse_1, τ) for τ in t]
-samples_2 = [SimpleEvolve.value_at(pulse_2, τ) for τ in t]
+samples_1 = [SimpleEvolve.amplitude(pulse_1, τ) for τ in t]
+samples_2 = [SimpleEvolve.amplitude(pulse_2, τ) for τ in t]
 plot(t, real.(samples_1), label="Real pulse 1",color=:blue)
 plot!(t, imag.(samples_1), label="Imag pulse 1", color=:orange)
 plot!(t, real.(samples_2), label="Real Pulse 2", color=:red, linewidth=1.5)
