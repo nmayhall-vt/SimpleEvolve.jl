@@ -48,8 +48,6 @@ signals = MultiChannelSignal(signals_)
 initial_state = "1"^(n_qubits÷2) * "0"^(n_qubits÷2)
 ψ_initial = zeros(ComplexF64, n_levels^n_qubits)  
 ψ_initial[1 + parse(Int, initial_state, base=n_levels)] = one(ComplexF64) 
-
-
 H_static = static_hamiltonian(device, n_levels)
 #eigenvalues and eigenvectors of the static Hamiltonian
 drives =a_fullspace(n_qubits, n_levels)

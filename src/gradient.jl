@@ -30,7 +30,8 @@ function gradientsignal_ODE(ψ0::Vector{ComplexF64},
                             eigvectors::Matrix{ComplexF64},
                             cost_ham,
                             n_signals::Int64,
-                            ∂Ω=Matrix{Float64}(undef,n_signals+1,n_sites);
+                            ∂Ω_real=Matrix{Float64}(undef,n_signals+1,n_sites),
+                            ∂Ω_imag=Matrix{Float64}(undef,n_signals+1,n_sites);
                             basis = "eigenbasis",
                             tol_ode=1e-8,
                             τ = T/n_signals) 
@@ -47,55 +48,60 @@ function gradientsignal_ODE(ψ0::Vector{ComplexF64},
     tmp_σ = zeros(ComplexF64, length(ψ0))
     tmp_ψ = zeros(ComplexF64, length(ψ0))
    
-    
-    #evolve the sigma state with ODE in forward direction
+    # Evolve the sigma state with ODE in forward direction
     parameters = [signals, n_sites, drives,eigvalues,false]
     prob = ODEProblem(dψdt!, σ, (0.0,T), parameters)
     sol  = solve(prob,RK4(), abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
     σ .= sol.u[end]
     σ .= σ /norm(σ)
     
-    # if cost_Hamiltonian is in eigenbasis comment out next line
-    transform!(σ, eigvectors,tmp_σ)            # transform the state to the qubitbasis
-    σ .= mul!(tmp_σ,cost_ham,σ)                # calculate C|ψ⟩    
+    # If cost_Hamiltonian is in eigenbasis comment out next line
+    transform!(σ, eigvectors,tmp_σ)            # Transform to qubitbasis
+    σ .= mul!(tmp_σ,cost_ham,σ)                # Calculate C|ψ⟩    
     
-    # # reverse time evolution of the sigma state
-    transform!(σ,eigvectors',tmp_σ)            # transform the state to the eigenbasis
-    # σ .*=exp.((-im*T)*eigvalues)             # rotate phases for final exp(iHDT)
-    # We don't need to rotate the phases here, I have checked with constant pulse
-    parameters = [signals, n_sites, drives,eigvalues,false]# this should be false 
-    # I have checked this by passing constant pulse
+    # Reverse time evolution of the sigma state
+    transform!(σ,eigvectors',tmp_σ)            # Transform back to eigenbasis
+    parameters = [signals, n_sites, drives,eigvalues,false]
     prob_ = ODEProblem(dψdt!, σ, (T,0.0), parameters)
     sol_  = solve(prob_,RK4(), abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
     σ .= sol_.u[end]
     σ .= σ /norm(σ)
 
-    #calculating gradient by evolving both ψ and σ states
-    for i ∈ (1:n_signals)
-        # display(i)
+    # Calculating gradient by evolving both ψ and σ states
+    for i ∈ 1:n_signals
         t_i = t_[i]
         t_f = t_[i]+δt
-        gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,t_i,i,τ)
+        # Modified gradient call with real/imag outputs
+        gradient_eachtimestep!(∂Ω_real, ∂Ω_imag, ψ, σ, signals, n_sites, 
+                              drives, eigvalues, t_i, i, τ)
         parameters = [signals, n_sites, drives, eigvalues,false]
+        
+        # Evolve ψ forward
         prob_ψ = ODEProblem(dψdt!, ψ, (t_i, t_f), parameters)
         sol_ψ = solve(prob_ψ,RK4(),abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
         ψ .= sol_ψ.u[end]
 
+        # Evolve σ backward
         prob_σ = ODEProblem(dψdt!, σ, (t_i, t_f), parameters)
         sol_σ  = solve(prob_σ,RK4(), abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
         σ .= sol_σ.u[end]
-    
     end
-    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,(t_[end]),n_signals+1,τ)
     
+    # Final gradient calculation
+    gradient_eachtimestep!(∂Ω_real, ∂Ω_imag, ψ, σ, signals, n_sites,
+                          drives, eigvalues, t_[end], n_signals+1, τ)
+    
+    # Normalize and transform back if needed
     σ .= σ /norm(σ)
     ψ .= ψ /norm(ψ)
-    if basis != "eigenbasis" # rotating out of the eigenspace
+    if basis != "eigenbasis"
         ψ .= mul!(tmp_ψ, eigvectors, ψ)
         σ .= mul!(tmp_ψ, eigvectors, σ)
     end
-    return ∂Ω , ψ, σ
+    
+    return ∂Ω_real, ∂Ω_imag, ψ, σ  # Return both gradient components
 end
+
 
 
 """
@@ -120,46 +126,54 @@ gradient_eachtimestep(δΩ, ψ, σ, multi_signal, n_sites, drives, device_action
 """
 
 
-function gradient_eachtimestep!(∂Ω,
-                                ψ::Vector{ComplexF64},
-                                σ::Vector{ComplexF64},
-                                multi_signal,
-                                n_sites::Int64,
-                                drives::Vector{Matrix{Float64}},
-                                eigvalues::Vector{Float64},
-                                t::Float64,
-                                time_index::Int64,
-                                τ::Float64)
+function gradient_eachtimestep!(∂Ω_real::Matrix{Float64}, 
+                               ∂Ω_imag::Matrix{Float64},  
+                               ψ::Vector{ComplexF64},
+                               σ::Vector{ComplexF64},
+                               multi_signal,
+                               n_sites::Int64,
+                               drives::Vector{Matrix{Float64}},
+                               eigvalues::Vector{Float64},
+                               t::Float64,
+                               time_index::Int64,
+                               τ::Float64)
     
-    dim= length(ψ)
-    dH_dΩ = zeros(ComplexF64, dim, dim)
+    dim = length(ψ)
+    dH_dΩ_real = zeros(ComplexF64, dim, dim)
+    dH_dΩ_imag = zeros(ComplexF64, dim, dim)
     device_action = Vector{ComplexF64}(undef, dim)
-    ψ0=copy(ψ)
-    σ0=copy(σ)
-    for k in 1:n_sites
-        dH_dΩ .+= exp(im*frequency(multi_signal.channels[k], t)*t).*drives[k]
-        dH_dΩ .+= dH_dΩ'
-
-        # derivative of interaction picture Hamiltonian
-        ## dt=multi_signal.channels[k].δt  
-        device_action .= exp.((im*t) .* eigvalues) 
-        ## device_action .= exp.((-im*dt) .* eigvalues)                 
-        expD =Diagonal(device_action)                   
-        lmul!(expD, dH_dΩ); rmul!(dH_dΩ, expD')  
-        ## dH_dΩ = eigvectors' * dH_dΩ * eigvectors
-        
-        AΨ = dH_dΩ * ψ0
-        # calculate gradient ⟨σ|A|ψ⟩
-        # σAψ = -im * (σ0' * AΨ)
-        σAψ = -im * (σ' * AΨ)*τ # this tau is generally equal to signals dt , 
-        # but for signal reconstruction we need to use τ=T/n_signals not τ=T/n_samples_grad
-
-        # ⟨σ|A|ψ⟩ + ⟨ψ|A|σ⟩ 
-        ∂Ω[time_index,k] = σAψ + σAψ'                      
-        dH_dΩ .= zeros(dim,dim) 
-    end 
+    ψ0 = copy(ψ)
+    σ0 = copy(σ)
     
+    for k in 1:n_sites
+        # Construct Hermitian derivative operator (critical fix)
+        # amp = amplitude(signals.channels[k], t)
+        term = exp(im * frequency(multi_signal.channels[k], t) * t) .* drives[k]
+        dH_dΩ_real .= term + term'
+        dH_dΩ_imag .= im * term - im*term' 
+        # Interaction picture transformation
+        device_action .= exp.((im * t) .* eigvalues)
+        expD = Diagonal(device_action)
+        lmul!(expD, dH_dΩ_imag)
+        rmul!(dH_dΩ_imag, expD')
+        lmul!(expD, dH_dΩ_real)
+        rmul!(dH_dΩ_real, expD')
+
+        # Compute gradient components
+        AΨ_real = dH_dΩ_real * ψ0
+        σAψ_real = -im * (σ' * AΨ_real) * τ
+        AΨ_imag = dH_dΩ_imag * ψ0
+        σAψ_imag = -im * (σ' * AΨ_imag) * τ
+
+        ∂Ω_real[time_index, k] = σAψ_real + σAψ_real'
+        ∂Ω_imag[time_index, k] = σAψ_imag + σAψ_imag'
+
+        dH_dΩ_imag .= zeros(ComplexF64, dim, dim)
+        dH_dΩ_real .= zeros(ComplexF64, dim, dim)
+    end
 end
+
+
 
 """
 gradientsignal_direct_exponentiation(ψ0, T, signals, n_sites, drives, eigvalues, device_action_independent_t, n_trotter_steps, cost_ham, n_signals, ∂Ω=Matrix{Float64}(undef,n_signals+1,n_sites))
@@ -234,11 +248,11 @@ function gradientsignal_direct_exponentiation(ψ0::Vector{ComplexF64},
     σ .= σ /norm(σ)
     #calculating gradient by evolving both ψ and σ states
     for i in 1:n_signals+1
-        gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,t_[i],i,τ)
+        gradient_eachtimestep_real!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,t_[i],i,τ)
         ψ .= single_trotter_exponentiation_step(ψ,signals, n_sites, drives, eigvalues, Δt,t_[i])
         σ .= single_trotter_exponentiation_step(σ,signals, n_sites, drives, eigvalues, Δt,t_[i])
     end
-    gradient_eachtimestep!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,t_series[end],n_signals+1,τ)
+    gradient_eachtimestep_real!(∂Ω,ψ,σ,signals,n_sites,drives,eigvalues,t_series[end],n_signals+1,τ)
   
     ψ .= ψ/norm(ψ)
     σ .= σ/norm(σ)
@@ -250,6 +264,47 @@ function gradientsignal_direct_exponentiation(ψ0::Vector{ComplexF64},
 
 end
 
+
+function gradient_eachtimestep_real!(∂Ω,
+                                ψ::Vector{ComplexF64},
+                                σ::Vector{ComplexF64},
+                                multi_signal,
+                                n_sites::Int64,
+                                drives::Vector{Matrix{Float64}},
+                                eigvalues::Vector{Float64},
+                                t::Float64,
+                                time_index::Int64,
+                                τ::Float64)
+    
+    dim= length(ψ)
+    dH_dΩ = zeros(ComplexF64, dim, dim)
+    device_action = Vector{ComplexF64}(undef, dim)
+    ψ0=copy(ψ)
+    σ0=copy(σ)
+    for k in 1:n_sites
+        dH_dΩ .+= exp(im*frequency(multi_signal.channels[k], t)*t).*drives[k]
+        dH_dΩ .+= dH_dΩ'
+
+        # derivative of interaction picture Hamiltonian
+        ## dt=multi_signal.channels[k].δt  
+        device_action .= exp.((im*t) .* eigvalues) 
+        ## device_action .= exp.((-im*dt) .* eigvalues)                 
+        expD =Diagonal(device_action)                   
+        lmul!(expD, dH_dΩ); rmul!(dH_dΩ, expD')  
+        ## dH_dΩ = eigvectors' * dH_dΩ * eigvectors
+        
+        AΨ = dH_dΩ * ψ0
+        # calculate gradient ⟨σ|A|ψ⟩
+        # σAψ = -im * (σ0' * AΨ)
+        σAψ = -im * (σ' * AΨ)*τ # this tau is generally equal to signals dt , 
+        # but for signal reconstruction we need to use τ=T/n_signals not τ=T/n_samples_grad
+
+        # ⟨σ|A|ψ⟩ + ⟨ψ|A|σ⟩ 
+        ∂Ω[time_index,k] = σAψ + σAψ'                      
+        dH_dΩ .= zeros(dim,dim) 
+    end 
+    
+end
 
 function gradientsignal_rotate(ψ0::Vector{ComplexF64},
                             T::Float64,

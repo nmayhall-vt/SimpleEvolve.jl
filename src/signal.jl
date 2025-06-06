@@ -1,3 +1,4 @@
+using Statistics
 """
     DigitizedSignal 
     A struct to represent a digitized signal with samples, time step, and carrier frequency.
@@ -90,4 +91,51 @@ function signalgradient_amplitude(t, j, signal::DigitizedSignal)
     else
         return 0.0  # No contribution from sample j
     end
+end
+
+
+struct WindowedSquareWave{T<:Number}
+    frequency::Float64
+    duty_cycle::Float64
+    window_amplitudes::Vector{T}  
+    window_durations::Vector{Float64}
+    cumulative_times::Vector{Float64}
+end
+
+function WindowedSquareWave(frequency, duty_cycle, window_amplitudes, window_durations)
+    cumulative_times = cumsum([0.0; window_durations])
+    T = promote_type(eltype(window_amplitudes), Float64)
+    WindowedSquareWave{T}(frequency, duty_cycle, window_amplitudes, window_durations, cumulative_times)
+end
+
+function value_at(sw::WindowedSquareWave{T}, t::Float64) where T<:Number
+    window_idx = searchsortedlast(sw.cumulative_times, t)
+    amplitude = window_idx > length(sw.window_amplitudes) ? zero(T) : sw.window_amplitudes[window_idx]
+    
+    period = 1/sw.frequency
+    phase = mod(t, period)
+    return phase < sw.duty_cycle * period ? amplitude : zero(T)
+end
+
+struct WindowedGaussianPulse{T<:Number}
+    amplitudes::Vector{T}      # Amplitude for each window (can be complex)
+    centers::Vector{Float64}   # Center time for each Gaussian window
+    widths::Vector{Float64}    # Width (σ) for each Gaussian window
+    frequencies::Vector{Float64} # Frequency (Hz or rad/s) for each window
+end
+
+function WindowedGaussianPulse(amplitudes, centers, widths, frequencies)
+    @assert length(amplitudes) == length(centers) == length(widths) == length(frequencies)
+    T = promote_type(eltype(amplitudes), Float64)
+    WindowedGaussianPulse{T}(amplitudes, centers, widths, frequencies)
+end
+
+function value_at(pulse::WindowedGaussianPulse, t::Float64)
+    s = zero(eltype(pulse.amplitudes))
+    for i in eachindex(pulse.amplitudes)
+        # Gaussian envelope * complex exponential for frequency
+        s += pulse.amplitudes[i] * exp(-0.5 * ((t - pulse.centers[i]) / pulse.widths[i])^2) *
+             exp(im * 2π * pulse.frequencies[i] * (t - pulse.centers[i]))
+    end
+    return s
 end

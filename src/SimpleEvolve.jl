@@ -14,6 +14,7 @@ include("penaltyfunctions.jl")
 
 
 export DigitizedSignal
+export WindowedSquareWave
 export amplitude
 export frequency
 export infidelity
@@ -34,6 +35,7 @@ export costfunction_trotter
 export gradientsignal_finite_difference
 export costfunction_ode_with_penalty
 export penalty_function
+export value_at
 
 export static_hamiltonian
 export Transmon
