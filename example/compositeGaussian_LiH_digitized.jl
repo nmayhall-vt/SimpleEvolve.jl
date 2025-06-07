@@ -9,25 +9,30 @@ using ForwardDiff: GradientConfig, Chunk
 using Random
 Cost_ham = npzread("lih30.npy")
 # display(Cost_ham)
-system= "lih30"
 n_qubits = round(Int, log2(size(Cost_ham,1)))
 n_levels = 2
-SYSTEM="h207"
-freqs = 2π*collect(4.8 .+ (0.02 * (1:n_qubits)))
-anharmonicities = 2π*0.3 * ones(n_qubits)
-coupling_map = Dict{QubitCoupling,Float64}()
-for p in 1:n_qubits
-    q = (p == n_qubits) ? 1 : p + 1
-    coupling_map[QubitCoupling(p,q)] = 2π*0.02
-end
-device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
+SYSTEM="lih30"
+device = choose_qubits(1:n_qubits, Transmon(
+    # 2π*[4.8, 4.84, 4.86, 4.88],                    # QUBIT RESONANCE FREQUENCIES
+    2π*[3.7, 4.2, 3.5, 4.0],                    # QUBIT RESONANCE FREQUENCIES
+    2π*[0.3, 0.3, 0.3, 0.3],                    # QUBIT ANHARMONICITIES
+    Dict{QubitCoupling,Float64}(                # QUBIT COUPLING CONSTANTS
+        QubitCoupling(1,2) => 2π*.018,
+        QubitCoupling(2,3) => 2π*.021,
+        QubitCoupling(3,4) => 2π*.020,
+        QubitCoupling(1,3) => 2π*.021,
+        QubitCoupling(2,4) => 2π*.020,
+        QubitCoupling(1,4) => 2π*.021,
+    )
+))
 
+# freqs = 2π*[4.8, 4.84, 4.86, 4.88]
+freqs = 2π*[3.7, 4.2, 3.5, 4.0]
 carrier_freqs = freqs.-2π*0.1  
-T=20.0
+T=30.0
 n_samples = 200
 δt = T/n_samples
-τ = δt
-t = 0:τ:T
+
 function costfunction_o(samples::Vector{Float64})
     # Split real vector into real and imaginary components
     n = length(samples) ÷ 2
@@ -55,7 +60,7 @@ n_samples_grad = n_samples
 ∂Ω0 = Matrix{Float64}(undef, n_samples_grad+1, n_qubits)
 τ = T/n_samples_grad
 a=a_q(n_levels)
-tol_ode=1e-10
+tol_ode=1e-6
 drives =a_fullspace(n_qubits, n_levels)
 eigvectors = eigvecs(Cost_ham)
 for i in 1:n_qubits
@@ -115,23 +120,34 @@ display(eigvalues)
 E,ϕ=eigen(Cost_ham )
 println("FCI energy: ", E[1])
 
+
+Random.seed!(4)  
 n_windows = 5
+phases_1 = 0.0 * rand(n_windows)
+phases_2 = π * rand(n_windows)
+phases_3 = π/2 * rand(n_windows)
+phases_4 = π/4 * rand(n_windows)
 centers = LinRange(T/(n_windows+1), T-T/(n_windows+1), n_windows)
 widths = fill(T/(6n_windows), n_windows)
-amplitudes = complex.(2 .* rand(n_windows) .- 1, 2 .* rand(n_windows) .- 1)  
+# amplitudes = complex.(2 .* rand(n_windows) .- 1, 2 .* rand(n_windows) .- 1)  
+amplitudes = complex.(2 .* rand(n_windows) , 2 .* rand(n_windows) )  
 frequencies_1 = carrier_freqs[1] * ones(n_windows)  # Constant frequency for all windows
 frequencies_2 = carrier_freqs[2] * ones(n_windows)  
 frequencies_3 = carrier_freqs[3] * ones(n_windows)  
 frequencies_4 = carrier_freqs[4] * ones(n_windows)
-pulse_1 = SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, frequencies_1)
-pulse_2 = SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, frequencies_2)
-pulse_3 = SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, frequencies_3)
-pulse_4 = SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, frequencies_4)
+pulse_1 = SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths,phases_1, frequencies_1)
+pulse_2 = SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths,phases_2, frequencies_2)
+pulse_3 = SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths,phases_3, frequencies_3)
+pulse_4 = SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths,phases_4, frequencies_4)
 
+τ = δt
+t = 0:τ:T
+t_=0:δt:T
 samples_1 = [SimpleEvolve.amplitude(pulse_1, τ) for τ in t]
 samples_2 = [SimpleEvolve.amplitude(pulse_2, τ) for τ in t]
 samples_3 = [SimpleEvolve.amplitude(pulse_3, τ) for τ in t]
 samples_4 = [SimpleEvolve.amplitude(pulse_4, τ) for τ in t]
+samples_matrix = hcat(samples_1, samples_2, samples_3, samples_4)
 plot(t, real.(samples_1), label="Real pulse 1",color=:blue)
 plot!(t, imag.(samples_1), label="Imag pulse 1", color=:orange)
 plot!(t, real.(samples_2), label="Real Pulse 2", color=:red, linewidth=1.5)
@@ -143,20 +159,19 @@ plot!(t, imag.(samples_4), label="Imag Pulse 4", color=:magenta)
 xlabel!("Time")
 ylabel!("Amplitude")
 title!("Windowed Gaussian Pulse with Frequency")
-savefig("windowed_gaussian_pulses_$(system).pdf")
-# Create WindowedGaussianPulse objects
+savefig("windowed_gaussian_pulses_$(SYSTEM).pdf")
+
+# Create DigitizedSignal objects
+
 signals_ =[
-    SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, frequencies_1),
-    SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, frequencies_2),
-    SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, frequencies_3),
-    SimpleEvolve.WindowedGaussianPulse(amplitudes, centers, widths, frequencies_4)
+    pulse_1, pulse_2, pulse_3, pulse_4
 ]
 signals= MultiChannelSignal(signals_)
+
 wGP_samples = [
-    [SimpleEvolve.amplitude(signals_[q], τ) for τ in t] for q in 1:n_qubits
+    samples_matrix[:, q] for q in 1:n_qubits
 ]
 samples_matrix = hcat(wGP_samples...)
-
 
 # Plot real and imaginary parts
 pulse_windows = range(0, T, length=n_samples+1)
@@ -171,7 +186,7 @@ pulse_windows = range(0, T, length=n_samples+1)
 )
 
 plot(Ω_plots, Ω_plots_imag, layout=(1, 2))
-savefig("complex_windowed_pulses_$(system).pdf")
+savefig("complex_windowed_pulses_$(SYSTEM).pdf")
 
 # Use your existing optimization setup
 samples_initial = [real(samples_matrix[:]); imag(samples_matrix[:])]
@@ -219,4 +234,4 @@ final_Ω_plots_imag = plot(
     layout=(n_qubits, 1), legend=false
 )
 plot(final_Ω_plots, final_Ω_plots_imag, layout=(1, 2))
-savefig("optimized_complex_windowed_gaussian_pulses_$(system).pdf")
+savefig("optimized_complex_windowed_gaussian_pulses_$(SYSTEM)_$(n_samples)_$(T).pdf")

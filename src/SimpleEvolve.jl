@@ -15,6 +15,7 @@ include("penaltyfunctions.jl")
 
 export DigitizedSignal
 export WindowedSquareWave
+export WindowedGaussianPulse
 export amplitude
 export frequency
 export infidelity

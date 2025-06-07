@@ -110,7 +110,7 @@ function WindowedSquareWave(frequency, duty_cycle, window_amplitudes, window_dur
     WindowedSquareWave{T}(frequency, duty_cycle, window_amplitudes, window_durations, cumulative_times)
 end
 
-function amplitude(sw::WindowedSquareWave{T}, t::Float64) where T<:Number
+function amplitude(sw::WindowedSquareWave{T}, t) where T<:Number
     window_idx = searchsortedlast(sw.cumulative_times, t)
     amplitude = window_idx > length(sw.window_amplitudes) ? zero(T) : sw.window_amplitudes[window_idx]
     
@@ -118,7 +118,7 @@ function amplitude(sw::WindowedSquareWave{T}, t::Float64) where T<:Number
     phase = mod(t, period)
     return phase < sw.duty_cycle * period ? amplitude : zero(T)
 end
-function frequency(sw::WindowedSquareWave, t::Float64)
+function frequency(sw::WindowedSquareWave, t)
     return sw.frequency
 end
 
@@ -126,28 +126,32 @@ end
     WindowedGaussianPulse(amplitudes, centers, widths, frequencies)
     Create a windowed Gaussian pulse with specified amplitudes, centers, widths, and frequencies.
 """
-struct WindowedGaussianPulse{T<:Number}<: AbstractSignalGenerator
-    amplitudes::Vector{T}      # Amplitude for each window (can be complex)
-    centers::Vector{Float64}   # Center time for each Gaussian window
-    widths::Vector{Float64}    # Width (σ) for each Gaussian window
-    frequencies::Vector{Float64} # Frequency (Hz or rad/s) for each window
+
+
+struct WindowedGaussianPulse{T<:Number} <: AbstractSignalGenerator
+    amplitudes::Vector{T}     # Complex or real amplitudes
+    centers::Vector{Float64}  # Time centers (μ)
+    widths::Vector{Float64}   # Standard deviations (σ)
+    phases::Vector{Float64}   # Phase offsets (radians)
+    frequencies::Vector{Float64} # Frequencies (Hz or rad/s)
 end
 
-function WindowedGaussianPulse(amplitudes, centers, widths, frequencies)
-    @assert length(centers) == length(widths) == length(frequencies)
+function WindowedGaussianPulse(amplitudes, centers, widths, phases,frequencies)
+    @assert length(centers) == length(widths) == length(phases)
     T = promote_type(eltype(amplitudes), Float64)
-    WindowedGaussianPulse{T}(amplitudes, centers, widths, frequencies)
+    WindowedGaussianPulse{T}(amplitudes, centers, widths, phases,frequencies)
 end
 
-function amplitude(pulse::WindowedGaussianPulse, t::Float64)
+function amplitude(pulse::WindowedGaussianPulse, t)
     s = zero(eltype(pulse.amplitudes))
     for i in eachindex(pulse.amplitudes)
-        # Gaussian envelope * complex exponential for frequency
-        s += pulse.amplitudes[i] * exp(-0.5 * ((t - pulse.centers[i]) / pulse.widths[i])^2) *
-             exp(im * 2π * pulse.frequencies[i] * (t - pulse.centers[i]))
+        s += pulse.amplitudes[i] * 
+             exp(-0.5 * ((t - pulse.centers[i]) / pulse.widths[i])^2) *
+             exp(im * pulse.phases[i])  # Phase rotation without oscillation
     end
     return s
 end
-function frequency(pulse::WindowedGaussianPulse, t::Float64)
+
+function frequency(pulse::WindowedGaussianPulse, t)
     return pulse.frequencies[1]
 end
