@@ -155,3 +155,96 @@ end
 function frequency(pulse::WindowedGaussianPulse, t)
     return pulse.frequencies[1]
 end
+
+"""
+    TanhEnvelope{T<:AbstractFloat}
+Signal with hyperbolic tangent envelope for smooth transitions.
+
+# Fields
+- `amplitude::T`: Peak amplitude
+- `sigma::T`: Rise/fall time constant
+- `center::T`: Central time position
+"""
+struct TanhEnvelope{T<:Number, S<:AbstractFloat}<: AbstractSignalGenerator
+    amplitude::T 
+    sigma::S
+    center::S
+end
+
+function value_at(sig::TanhEnvelope, t::Real) 
+    return sig.amplitude * tanh((t - sig.center)/sig.sigma)
+end
+
+struct SinusoidalSignal{T<:Number} <: AbstractSignalGenerator
+    amplitude::T
+    frequency::Float64
+    phase::Float64
+end
+
+function value_at(sig::SinusoidalSignal, t::Real,n_samples::Int64)
+    return sig.amplitude * sin(2 * π *sig.frequency * t/n_samples + sig.phase)
+end
+
+function to_digitized(sig::SinusoidalSignal{T}, Δt::T, n_samples::Int) where T
+    times = (0:n_samples-1) .* Δt
+    samples = [value_at(sig, t,n_samples) for t in times]
+    return DigitizedSignal(samples, Δt, sig.frequency)
+end
+
+function analyze_sinusoidalsignal(samples, δt)
+    N = length(samples)
+    fft_result = fft(samples)
+    freq_bins = fftshift(fftfreq(N, δt))
+    fft_mags = abs.(fftshift(fft_result))
+    peak_idx = argmax(fft_mags)
+    freq = abs(freq_bins[peak_idx])
+    amplitude = (maximum(samples) - minimum(samples)) / 2
+    return amplitude, freq
+end
+
+
+"""
+    SignalSum{T<:AbstractFloat}
+Algebraic sum of multiple signal components.
+"""
+struct SignalSUM <: AbstractSignalGenerator
+    components::Vector{<:AbstractSignalGenerator}
+end
+
+
+function value_at(sig::SignalSUM, t::T) where T
+    return sum(value_at(c, t) for c in sig.components)
+end
+
+"""
+    gaussian_filter(signal::DigitizedSignal, bandwidth::Real)
+    Apply a Gaussian filter to a digitized signal in the frequency domain.
+    
+    # Arguments
+    - `signal`: The digitized signal to be filtered.
+    - `bandwidth`: The bandwidth of the Gaussian filter.
+    
+    # Returns
+    A new `DigitizedSignal` with the filtered samples.
+"""
+
+function gaussian_filter(signal::DigitizedSignal{T}, bandwidth::Real) where T
+    # Fourier transform
+    spectrum = fft(signal.samples)
+    
+    # Frequency axis setup
+    N = length(spectrum)
+    δf = 1/(N*signal.δt)  # Frequency resolution
+    carrier_bin = round(Int, signal.carrier_freq/δf) + 1
+    
+    # Construct Gaussian window
+    freq_axis = fftfreq(N, 1/signal.δt)
+    gaussian = exp.(-(freq_axis .- signal.carrier_freq).^2 / (2*bandwidth^2))
+    
+    # Apply filter and inverse transform
+    filtered_spectrum = spectrum .* fftshift(gaussian)
+    filtered_signal = real(ifft(filtered_spectrum))
+    
+    # Preserve metadata
+    return DigitizedSignal(filtered_signal, signal.δt, signal.carrier_freq)
+end

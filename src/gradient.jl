@@ -54,7 +54,7 @@ function gradientsignal_ODE(ψ0::Vector{ComplexF64},
     sol  = solve(prob,RK4(), abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
     σ .= sol.u[end]
     σ .= σ /norm(σ)
-    
+
     # If cost_Hamiltonian is in eigenbasis comment out next line
     transform!(σ, eigvectors,tmp_σ)            # Transform to qubitbasis
     σ .= mul!(tmp_σ,cost_ham,σ)                # Calculate C|ψ⟩    
@@ -71,7 +71,7 @@ function gradientsignal_ODE(ψ0::Vector{ComplexF64},
     for i ∈ 1:n_signals
         t_i = t_[i]
         t_f = t_[i]+δt
-        # Modified gradient call with real/imag outputs
+        
         gradient_eachtimestep!(∂Ω_real, ∂Ω_imag, ψ, σ, signals, n_sites, 
                               drives, eigvalues, t_i, i, τ)
         parameters = [signals, n_sites, drives, eigvalues,false]
@@ -99,7 +99,87 @@ function gradientsignal_ODE(ψ0::Vector{ComplexF64},
         σ .= mul!(tmp_ψ, eigvectors, σ)
     end
     
-    return ∂Ω_real, ∂Ω_imag, ψ, σ  # Return both gradient components
+    return ∂Ω_real, ∂Ω_imag, ψ, σ  
+end
+
+function gradientsignal_ODE(ψ0::Vector{ComplexF64},
+                            T::Float64,
+                            signals,
+                            n_sites::Int64,
+                            drives::Vector{Matrix{Float64}},
+                            eigvalues::Vector{Float64},
+                            eigvectors::Matrix{ComplexF64},
+                            cost_ham,
+                            n_signals::Int64,
+                            ∂Ω=Matrix{Float64}(undef,n_signals+1,n_sites);
+                            basis = "eigenbasis",
+                            tol_ode=1e-8,
+                            τ = T/n_signals,
+                            signal_amp="real amp") 
+
+    # eigvalues, eigvecs = eigen(Hstatic)
+    tmp_σ = zeros(ComplexF64, length(ψ0))
+    if basis != "eigenbasis"
+        ψ0 = eigvectors' * ψ0
+    end
+    ψ     = copy(ψ0)
+    σ     = copy(ψ0)
+    t_    = range(0,T,length=n_signals+1)
+    δt    = T/n_signals
+    tmp_σ = zeros(ComplexF64, length(ψ0))
+    tmp_ψ = zeros(ComplexF64, length(ψ0))
+   
+    # Evolve the sigma state with ODE in forward direction
+    parameters = [signals, n_sites, drives,eigvalues,false]
+    prob = ODEProblem(dψdt!, σ, (0.0,T), parameters)
+    sol  = solve(prob,RK4(), abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
+    σ .= sol.u[end]
+    σ .= σ /norm(σ)
+
+    # If cost_Hamiltonian is in eigenbasis comment out next line
+    transform!(σ, eigvectors,tmp_σ)            # Transform to qubitbasis
+    σ .= mul!(tmp_σ,cost_ham,σ)                # Calculate C|ψ⟩    
+    
+    # Reverse time evolution of the sigma state
+    transform!(σ,eigvectors',tmp_σ)            # Transform back to eigenbasis
+    parameters = [signals, n_sites, drives,eigvalues,false]
+    prob_ = ODEProblem(dψdt!, σ, (T,0.0), parameters)
+    sol_  = solve(prob_,RK4(), abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
+    σ .= sol_.u[end]
+    σ .= σ /norm(σ)
+
+    # Calculating gradient by evolving both ψ and σ states
+    for i ∈ 1:n_signals
+        t_i = t_[i]
+        t_f = t_[i]+δt
+        gradient_eachtimestep_real!(∂Ω, ψ, σ, signals, n_sites, 
+                              drives, eigvalues, t_i, i, τ)
+        parameters = [signals, n_sites, drives, eigvalues,false]
+        
+        # Evolve ψ forward
+        prob_ψ = ODEProblem(dψdt!, ψ, (t_i, t_f), parameters)
+        sol_ψ = solve(prob_ψ,RK4(),abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
+        ψ .= sol_ψ.u[end]
+
+        # Evolve σ backward
+        prob_σ = ODEProblem(dψdt!, σ, (t_i, t_f), parameters)
+        sol_σ  = solve(prob_σ,RK4(), abstol=tol_ode, reltol=tol_ode,save_everystep=false,maxiters=1e8)
+        σ .= sol_σ.u[end]
+    end
+    
+    # Final gradient calculation
+    gradient_eachtimestep_real!(∂Ω, ψ, σ, signals, n_sites,
+                          drives, eigvalues, t_[end], n_signals+1, τ)
+    
+    # Normalize and transform back if needed
+    σ .= σ /norm(σ)
+    ψ .= ψ /norm(ψ)
+    if basis != "eigenbasis"
+        ψ .= mul!(tmp_ψ, eigvectors, ψ)
+        σ .= mul!(tmp_ψ, eigvectors, σ)
+    end
+    
+    return ∂Ω, ψ, σ  
 end
 
 
@@ -263,7 +343,10 @@ function gradientsignal_direct_exponentiation(ψ0::Vector{ComplexF64},
     return ∂Ω, ψ, σ
 
 end
-
+"""
+# Function to compute the gradient of the energy with respect to the amplitude of the signal at each time step
+the signal should have real amplitudes
+"""
 
 function gradient_eachtimestep_real!(∂Ω,
                                 ψ::Vector{ComplexF64},
