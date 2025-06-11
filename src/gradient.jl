@@ -102,7 +102,7 @@ function gradientsignal_ODE(ψ0::Vector{ComplexF64},
     return ∂Ω_real, ∂Ω_imag, ψ, σ  
 end
 
-function gradientsignal_ODE(ψ0::Vector{ComplexF64},
+function gradientsignal_ODE_real(ψ0::Vector{ComplexF64},
                             T::Float64,
                             signals,
                             n_sites::Int64,
@@ -114,8 +114,7 @@ function gradientsignal_ODE(ψ0::Vector{ComplexF64},
                             ∂Ω=Matrix{Float64}(undef,n_signals+1,n_sites);
                             basis = "eigenbasis",
                             tol_ode=1e-8,
-                            τ = T/n_signals,
-                            signal_amp="real amp") 
+                            τ = T/n_signals) 
 
     # eigvalues, eigvecs = eigen(Hstatic)
     tmp_σ = zeros(ComplexF64, length(ψ0))

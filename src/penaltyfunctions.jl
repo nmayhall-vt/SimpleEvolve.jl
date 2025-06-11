@@ -1,7 +1,7 @@
 using SimpleEvolve
 using LinearAlgebra
 """
-penalty_function(Ω::Vector{Float64}, Ω₀::Float64)
+penalty_function(Ω::Vector{ComplexF64}, Ω₀::Float64)
     Computes the penalty term for the control amplitudes Ω.
         f(x) = exp(y - 1 / y) for y > 0, y= abs(x) - 1
         
@@ -12,7 +12,7 @@ penalty_function(Ω::Vector{Float64}, Ω₀::Float64)
         penalty : Computed penalty term
 """
 
-function penalty_function(Ω::Vector{Float64}, Ω₀::Float64)
+function penalty_function(Ω, Ω₀::Float64)
     penalty = 0.0
     for x in Ω ./ Ω₀
         y = abs(x) - 1
@@ -23,7 +23,7 @@ function penalty_function(Ω::Vector{Float64}, Ω₀::Float64)
     return penalty
 end
 """
-penalty_gradient(Ω::Vector{Float64}, Ω₀::Float64)
+penalty_gradient(Ω::Vector{ComplexF64}, Ω₀::Float64)
     Computes the gradient of the penalty term for the control amplitudes Ω.
         df(x)/dx = sign(x) * h * (1 + 1 / y^2) / Ω₀ for y > 0, y= abs(x) - 1
         where h = exp(y - 1 / y)
@@ -35,7 +35,7 @@ penalty_gradient(Ω::Vector{Float64}, Ω₀::Float64)
         grad : Computed gradient of the penalty term
 
 """
-function penalty_gradient(Ω::Vector{Float64}, Ω₀::Float64)
+function penalty_gradient(Ω, Ω₀::Float64)
     grad = zeros(length(Ω))
     for (i, x) in enumerate(Ω ./ Ω₀)
         y = abs(x) - 1
@@ -92,7 +92,7 @@ function costfunction_ode_with_penalty(ψ0::Vector{ComplexF64},
 
     # Extract control amplitudes Ω from signal
     n_timesteps = length(signal.channels[1].samples)
-    Ω = zeros(n_timesteps, n_sites)
+    Ω = zeros(ComplexF64, n_timesteps, n_sites)
     for i in 1:n_sites
         Ω[:, i] = signal.channels[i].samples
     end
