@@ -37,6 +37,7 @@ export gradientsignal_finite_difference
 export costfunction_ode_with_penalty
 export penalty_function
 export value_at
+export dψdt_multiple_states!
 
 export static_hamiltonian
 export Transmon

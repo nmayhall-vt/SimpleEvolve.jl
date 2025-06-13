@@ -283,3 +283,87 @@ function _step(ψ::Vector{ComplexF64},
     O = kron_concat(tmpM_, tmpK_)
     return mul!(tmpV, O, ψ)
 end
+"""
+dψdt_multiple_states!(dΨ, Ψ, parameters, t)
+    Function to compute schrodinger equation of multiple state vectors
+    args:
+        dΨ       : Time derivative of the state vectors to compute
+        Ψ        : Current state vectors
+        parameters: Parameters for the Hamiltonian: 
+                    signals, n_sites, drives, eigvalues, adjoint
+        t        : Current time
+    returns:
+        dψdt     : schrodinger equation for multiple states
+
+"""
+
+function dψdt_multiple_states!(dΨ, Ψ, parameters, t)
+    signals   = parameters[1]
+    n_sites   = parameters[2]
+    drives    = parameters[3]
+    eigvalues = parameters[4]
+    adjoint   = parameters[5]
+
+    dim = size(Ψ, 1)
+    num_states = size(Ψ, 2)
+    
+    # Construct time-dependent Hamiltonian
+    H = zeros(ComplexF64, dim, dim)
+    for k in 1:n_sites
+        amp = amplitude(signals.channels[k], t)
+        freq = frequency(signals.channels[k], t)
+        H .+= amp * exp(im*freq*t) .* drives[k]
+    end
+    H .+= H'  # Ensure Hermiticity
+    
+    # Interaction picture transformation
+    device_action = exp.((im*t*(-1)^adjoint) .* eigvalues)
+    expD = Diagonal(device_action)
+    lmul!(expD, H)
+    rmul!(H, expD')
+    
+    # Apply Hamiltonian to each state column simultaneously
+    @views for i in 1:num_states
+        mul!(dΨ[:,i], H, Ψ[:,i], -im, false)
+    end
+end
+
+"""
+function to evolve multiple states using ODE solver simultaneously
+"""
+function evolve_ODE_multiple_states(
+                                Ψ0::Matrix{ComplexF64},
+                                T::Float64,
+                                signals,
+                                n_sites::Int,
+                                drives,
+                                eigvalues,
+                                eigvectors::Matrix{ComplexF64};
+                                basis = "eigenbasis",
+                                tol_ode = 1e-8)
+    # If not in eigenbasis, rotate initial states into eigenbasis
+    if basis != "eigenbasis"
+        Ψ0 = eigvectors' * Ψ0
+    end
+
+    # Prepare ODE parameters
+    parameters = [signals, n_sites, drives, eigvalues, false]
+
+    # Set up and solve the ODE
+    prob = ODEProblem(dψdt_multiple_states!, Ψ0, (0.0, T), parameters)
+    sol = solve(prob, RK4(), reltol=tol_ode, abstol=tol_ode, save_everystep=false, maxiters=1e8)
+
+    # Extract and normalize the final states
+    Ψ_final = sol.u[end]
+    for i in 1:size(Ψ_final, 2)
+        Ψ_final[:, i] ./= norm(Ψ_final[:, i])
+    end
+
+    # Rotate back out of eigenbasis if necessary
+    if basis != "eigenbasis"
+        Ψ_final = eigvectors * Ψ_final
+    end
+
+    return Ψ_final
+end
+
