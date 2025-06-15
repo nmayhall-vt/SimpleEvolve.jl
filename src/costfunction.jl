@@ -126,7 +126,7 @@ function costfunction_ode_ssvqe(
                         )
     n_states = size(Ψ0, 2)
     if weights === nothing && weighted===true
-        weights = reverse(collect(1.0:-0.2:1.0-0.2*(n_states-1)))
+        weights = reverse(collect(1.0:-0.1:1.0-0.1*(n_states-1)))
     end
 
     Ψ_ode = evolve_ODE_multiple_states(
