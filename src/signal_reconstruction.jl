@@ -49,6 +49,7 @@ function amplitude_ws(signal::DigitizedSignal, t; window_radius=8)
         # Accumulate weighted sample contribution
         sum_val += signal.samples[n] * sinc_val * window_val
     end
+  
     return sum_val
 end
 
@@ -131,7 +132,7 @@ function whittaker_shannon_fft(x::Vector{T}, output_length::Int) where T<:Real
 end
 
 """
-lowpasss(signal::Vector{T}, cutoff::Real, fs::Real)
+lowpass(signal::Vector{T}, cutoff::Real, fs::Real)
     Lowpass filter a signal using a FIR filter
     Args:
         signal: Input signal
@@ -143,10 +144,11 @@ lowpasss(signal::Vector{T}, cutoff::Real, fs::Real)
 
 """
 
-function lowpass(signal::Vector{T}, cutoff::Real, fs::Real) where T<:Real
+function lowpass(signal::Vector{T}, cutoff::Real, fs::Real;hanning_window=51) where T<:Real
     nyquist = fs/2
     normalized_cutoff = cutoff/nyquist
-    fir = digitalfilter(Lowpass(normalized_cutoff), FIRWindow(hanning(51)))
+    fir = digitalfilter(Lowpass(normalized_cutoff), FIRWindow(hanning(hanning_window)))
+    # println(size(fir))
     return filtfilt(fir, signal)  # Zero-phase filtering
 end
 
@@ -358,7 +360,7 @@ end
 
 function reconstruct_gradient_hybrid(signal::DigitizedSignal,
                                     output_samples::Int;
-                                    secondary_method=:cubic_spline,
+                                    secondary_method=:whittaker_shannon,
                                     weight=0.5,
                                     poly_order=4,
                                     window_radius=8,
@@ -448,6 +450,7 @@ function validate_and_expand(δΩ_,
                             weights=0.5,
                             poly_order=4,
                             window_radius=8,
+                            hanning_window=51,
                             filter_cutoff_ratio=0.8)
     # Validate input dimensions
     @assert size(grad_ode, 1) == n_grad_signals + 1 "Input matrix must have n_grad_signals+1 rows"
@@ -462,6 +465,7 @@ function validate_and_expand(δΩ_,
                                 weight=weights,
                                 poly_order=poly_order,
                                 window_radius=window_radius,
+                                hanning_window=hanning_window,
                                 filter_cutoff_ratio=filter_cutoff_ratio)
     end
     return δΩ_
@@ -491,12 +495,25 @@ function reconstruct(signal::DigitizedSignal,
                     weight=0.5,
                     poly_order=4,
                     window_radius=8,
+                    hanning_window=51,
                     filter_cutoff_ratio=0.8)
     new_times = range(0, (length(signal.samples)-1)*signal.δt, length=output_samples)
     
     if method == :whittaker_shannon
-        # return reconstruct_gradient_ws(signal, output_samples)
-        return [amplitude_ws(signal, t) for t in new_times]
+        upsampled=[amplitude_ws(signal, t;window_radius=window_radius) for t in new_times]
+        original_samples = length(signal.samples)
+        δt_original = signal.δt
+        new_δt = δt_original * (original_samples/output_samples)
+        # Anti-aliasing filter parameters
+        original_nyquist = 1/(2δt_original) # Critical cutoff frequency
+        new_fs = 1/new_δt 
+        # println(upsampled)
+        # Apply FIR lowpass filter
+        filtered = lowpass(upsampled, original_nyquist, new_fs;hanning_window=hanning_window)
+        return filtered
+
+    elseif method == :whittaker_shannon_lowpass
+        return reconstruct_gradient_ws(signal, output_samples)
     elseif method == :linear
         return [amplitude_linear(signal, t) for t in new_times]
     elseif method == :polynomial
@@ -521,4 +538,3 @@ function reconstruct(signal::DigitizedSignal,
         """))
     end
 end
-

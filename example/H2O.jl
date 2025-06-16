@@ -4,8 +4,6 @@ using Plots
 using LinearAlgebra
 using Optim
 using LineSearches
-using ForwardDiff
-using ForwardDiff: GradientConfig, Chunk
 using Random
 
 Cost_ham = npzread("h2o_ham.npy") 
@@ -24,8 +22,8 @@ end
 device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
-T=40.0
-n_samples = 300
+T=30.0
+n_samples = 600
 δt = T/n_samples
 t_=collect(0:δt:T)
 
@@ -58,7 +56,6 @@ n_trotter_steps =2000
 dt=T/n_trotter_steps
 V = eigvectors*Diagonal(exp.((-im*dt ) * eigvalues)) *eigvectors' 
 aq=a_q(n_levels)
-tol_ode=1e-10
 
 Λ, U = eigen(Cost_ham)
 E_actual = Λ[1]
@@ -70,25 +67,26 @@ for i in 1:n_qubits
 end
 
 # we have to optimize the samples in the signal
-n_samples_grad = Int(n_samples/2)
+n_samples_grad = Int(n_samples/3)
 δΩ_ = Matrix{Float64}(undef, n_samples+1, n_qubits)
 a=a_q(n_levels)
-tol_ode=1e-10
+tol_ode=1e-4
 # gradientsignal for less no of samples
 δΩ = zeros(n_samples_grad+1,n_qubits)
 Grad = zeros(Float64, n_samples+1, n_qubits)
 samples_matrix=[sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
 samples_initial=reshape(samples_matrix, :)
+dt=T/n_samples_grad
 signals_ = [DigitizedSignal([sin(2π*(t/n_samples)) for t in 0:n_samples], δt, f) for f in carrier_freqs]
 signals = MultiChannelSignal(signals_)
-dt=T/n_samples_grad
+
 
 function gradient_ode!(Grad, samples)
     Grad = reshape(Grad, :, n_qubits)
     samples = reshape(samples, n_samples+1, n_qubits)
-    signals_= [DigitizedSignal(samples[:,i], δt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
+    signals_= [DigitizedSignal(samples[1:Int(round(dt/δt)):end,i],dt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
     signals= MultiChannelSignal(signals_)
-    grad_ode,ψ_ode, σ_ode =SimpleEvolve.gradientsignal_ODE(ψ_initial,
+    grad_ode,ψ_ode, σ_ode =gradientsignal_ODE(ψ_initial,
                             T,
                             signals,
                             n_qubits,
@@ -99,7 +97,8 @@ function gradient_ode!(Grad, samples)
                             n_samples_grad,
                             δΩ;
                             basis="qubitbasis",
-                            tol_ode=tol_ode)
+                            tol_ode=tol_ode,
+                            τ=δt)
 
     grad_ode_expanded =validate_and_expand(δΩ_,grad_ode,
                                             n_samples_grad,
@@ -117,6 +116,8 @@ function gradient_ode!(Grad, samples)
     end
     return Grad
 end
+
+
 # OPTIMIZATION ALGORITHM
 linesearch = LineSearches.MoreThuente()
 optimizer = Optim.BFGS(linesearch=linesearch)
@@ -125,9 +126,9 @@ optimizer = Optim.BFGS(linesearch=linesearch)
 options = Optim.Options(
         show_trace = true,
         show_every = 1,
-        f_reltol   = 1e-6,
+        f_reltol   = 1e-9,
         g_tol      = 1e-6,
-        iterations = 200,
+        iterations = 1000,
 )
 
 

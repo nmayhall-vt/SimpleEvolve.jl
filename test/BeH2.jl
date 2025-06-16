@@ -24,8 +24,8 @@ end
 device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 
-T=20.0
-n_samples = 30
+T=40.0
+n_samples = 40
 δt = T/n_samples
 t_=collect(0:δt:T)
 
@@ -54,12 +54,6 @@ eigvalues, eigvectors = eigen(Hermitian(H_static))  # Ensures real eigenvalues
 println("Eignvalues of our static Hamiltonian")
 display(eigvalues)
 
-n_trotter_steps =2000
-dt=T/n_trotter_steps
-V = eigvectors*Diagonal(exp.((-im*dt ) * eigvalues)) *eigvectors' 
-aq=a_q(n_levels)
-tol_ode=1e-10
-
 Λ, U = eigen(Cost_ham)
 E_actual = Λ[1]
 println("Actual energy: $E_actual") 
@@ -70,10 +64,10 @@ for i in 1:n_qubits
 end
 
 # we have to optimize the samples in the signal
-n_samples_grad = Int(n_samples/3)
+n_samples_grad = n_samples
 δΩ_ = Matrix{Float64}(undef, n_samples+1, n_qubits)
 a=a_q(n_levels)
-tol_ode=1e-10
+tol_ode=1e-6
 # gradientsignal for less no of samples
 δΩ = zeros(n_samples_grad+1,n_qubits)
 Grad = zeros(Float64, n_samples+1, n_qubits)
@@ -86,7 +80,7 @@ dt=T/n_samples_grad
 function gradient_ode!(Grad, samples)
     Grad = reshape(Grad, :, n_qubits)
     samples = reshape(samples, n_samples+1, n_qubits)
-    signals_= [DigitizedSignal(samples[:,i], δt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
+    signals_= [DigitizedSignal(samples[:,i],dt, carrier_freqs[i]) for i in 1:length(carrier_freqs)]
     signals= MultiChannelSignal(signals_)
     grad_ode,ψ_ode, σ_ode =SimpleEvolve.gradientsignal_ODE(ψ_initial,
                             T,
@@ -100,27 +94,18 @@ function gradient_ode!(Grad, samples)
                             δΩ;
                             basis="qubitbasis",
                             tol_ode=tol_ode)
-
-    grad_ode_expanded =validate_and_expand(δΩ_,grad_ode,
-                                            n_samples_grad,
-                                            n_samples,
-                                            n_qubits, 
-                                            T, 
-                                            carrier_freqs,
-                                            :whittaker_shannon)
-                                            
     for k in 1:n_qubits
         for i in 1:n_samples+1
             # considering the frequency remain as constants
-            Grad[i,k] = grad_ode_expanded[i,k] 
+            Grad[i,k] = grad_ode[i,k] 
         end
     end
     return Grad
 end
 # OPTIMIZATION ALGORITHM
 linesearch = LineSearches.MoreThuente()
-optimizer = Optim.BFGS(linesearch=linesearch)
-# optimizer = Optim.LBFGS(linesearch=linesearch)
+# optimizer = Optim.BFGS(linesearch=linesearch)
+optimizer = Optim.LBFGS(linesearch=linesearch)
 # OPTIMIZATION OPTIONS
 options = Optim.Options(
         show_trace = true,
@@ -162,7 +147,7 @@ pulse_windows=range(0, T, length=n_samples+1)
     [plot(
             pulse_windows, Ω[:,q]
     ) for q in 1:2]...,
-    title = "Initial Signals",
+    title = "Final Signals",
     legend = false,
     layout = (n_qubits,1),
 )

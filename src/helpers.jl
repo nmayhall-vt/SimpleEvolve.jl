@@ -111,6 +111,10 @@ function transform!(
 ) where T <: Number
     x .= mul!(_x, A, x)
 end
+function transform!(x::AbstractVector{T}, A::AbstractMatrix{<:Number}, _x::AbstractVector{T}) where T <: Number
+    x .= mul!(_x, A, x)
+end
+
 function kron_concat(
     ops::AbstractVector{Matrix{T}},
     O_::AbstractVector{Matrix{T}},
