@@ -11,7 +11,7 @@ using Printf
 using Test
 
 
-@testset "n_level 3 Optimization " begin
+@testset "n_level 2 Optimization " begin
     Cost_ham = npzread("lih15.npy")
     # display(Cost_ham)
     n_qubits = round(Int, log2(size(Cost_ham, 1)))
