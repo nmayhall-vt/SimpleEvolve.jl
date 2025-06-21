@@ -7,7 +7,6 @@ using LineSearches
 using FFTW
 using JLD2
 using Random
-using Printf
 using Test
 
 
