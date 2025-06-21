@@ -213,7 +213,30 @@ function infidelity(ψ,φ)
     return 1 - abs2(ψ'*φ)
 end
 
+"""
+trotter_evolve
+    Function to evolve the state vector using trotterization of time
+    Time-evolves an initial quantum state `ψ0` under a time-dependent Hamiltonian using a second-order Trotter-Suzuki approximation in the eigenbasis of a static part of the Hamiltonian.
 
+    # Arguments
+    - `ψ0::Vector{ComplexF64}`: Initial quantum state vector in the device or eigenbasis, depending on `basis`.
+    - `T::Float64`: Total time of evolution.
+    - `signals`: Control signals or time-dependent coefficients that define the dynamic/drive part of the Hamiltonian. Must be compatible with `_step`.
+    - `n_sites::Int64`: Number of qubits or quantum sites in the system.
+    - `n_levels::Int64`: Local Hilbert space dimension for each site.
+    - `a_q::Matrix{Float64}`: Precomputed matrix of annihilation operators.
+    - `eigvalues`: Eigenvalues of the static (time-independent) Hamiltonian.
+    - `eigvectors::Matrix{ComplexF64}`: Corresponding eigenvectors of the static Hamiltonian.
+
+    # Optional Keyword Arguments
+    - `basis::String="eigenbasis"`: Indicates the basis in which `ψ0` is defined. If `"eigenbasis"`, state is evolved and transformed accordingly; if not, appropriate basis rotations are applied.
+    - `n_trotter_steps::Int=1000`: Number of Trotter time steps. A larger number improves accuracy but increases computational cost.
+
+    # Returns
+    - `ψ::Vector{ComplexF64}`: The evolved quantum state at time `T`, in the same basis as the input.
+
+
+"""
 function trotter_evolve(ψ0::Vector{ComplexF64},
                             T::Float64,
                             signals,

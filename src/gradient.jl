@@ -101,6 +101,9 @@ function gradientsignal_ODE(ψ0::Vector{ComplexF64},
     
     return ∂Ω_real, ∂Ω_imag, ψ, σ  
 end
+#
+# same function as gradientsignal_ODE but it tackles only real amplitudes signal
+#
 
 function gradientsignal_ODE_real(ψ0::Vector{ComplexF64},
                             T::Float64,
@@ -387,7 +390,9 @@ function gradient_eachtimestep_real!(∂Ω,
     end 
     
 end
-
+#
+# same function as gradientsignal_ODE but with trotter step 
+#
 function gradientsignal_rotate(ψ0::Vector{ComplexF64},
                             T::Float64,
                             signals,
@@ -502,7 +507,7 @@ function gradientsignal_rotate(ψ0::Vector{ComplexF64},
     return ∂Ω,ψ,σ
 end
 
-
+# computes gradient at each trotter step
 
 function gradient_eachstep!(∂Ω,
                             i::Int64,
@@ -565,7 +570,7 @@ function single_step(ψ::Vector{ComplexF64},
     return mul!(tmpV, O, ψ)
 end
 
-
+# computes gradient signal using finite difference (central difference formula)
 
 function gradientsignal_finite_difference(ψ0::Vector{ComplexF64},
                             T::Float64,
@@ -620,6 +625,7 @@ function gradientsignal_finite_difference(ψ0::Vector{ComplexF64},
     return ∂Ω
 end
 
+# computes gradient signal using finite difference (forward difference formula)
 
 function gradientsignal_fd(ψ0::Vector{ComplexF64},
                         T::Float64,

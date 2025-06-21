@@ -52,173 +52,6 @@ function penalty_gradient(Ω, Ω₀::Float64)
     end
     return grad
 end
-"""
-costfunction_ode_with_penalty(ψ0::Vector{ComplexF64}, eigvals::Vector{Float64}, signal, n_sites::Int, drives, eigvectors::Matrix{ComplexF64}, T::Float64, Cost_ham; basis = "eigenbasis", tol_ode=1e-8, λ::Float64=0.1, Ω₀::Float64=1.0+2π+0.02)
-    Computes the cost function with a penalty term for the control amplitudes.
-    
-    Args:
-        ψ0         : Initial state vector
-        eigvals    : Eigenvalues of the Hamiltonian
-        signal     : Control signal
-        n_sites    : Number of sites
-        drives     : Drives applied to the system
-        eigvectors : Eigenvectors of the Hamiltonian
-        T          : Total time for evolution
-        Cost_ham   : Hamiltonian for cost function
-        basis      : Basis for the computation (default: "eigenbasis")
-        tol_ode    : Tolerance for ODE solver (default: 1e-8)
-        λ          : Penalty weight (default: 0.1)
-        Ω₀         : Reference amplitude (default: 1.0 + 2π + 0.02)
-        
-    Returns:
-        cost      : Computed cost function value with penalty
-        ψ_ode      : Evolved state vector
-
-"""
-
-
-function costfunction_ode_with_penalty(ψ0::Vector{ComplexF64},
-                         eigvals::Vector{Float64},
-                         signal, 
-                         n_sites::Int, 
-                         drives,
-                         eigvectors::Matrix{ComplexF64}, 
-                         T::Float64, 
-                         Cost_ham;
-                         basis = "eigenbasis",
-                         tol_ode=1e-8,
-                         λ::Float64=1.0,
-                         Ω₀::Float64=2π*0.02) 
-
-    # Evolve the state using ODE
-    ψ_ode = evolve_ODE(ψ0, T, signal, n_sites, drives, eigvals, eigvectors;
-                       basis=basis, tol_ode=tol_ode)
-    fidelity_cost = real(ψ_ode' * Cost_ham * ψ_ode)
-
-    # Extract control amplitudes Ω from signal
-    n_timesteps = length(signal.channels[1].samples)
-    Ω = zeros(ComplexF64, n_timesteps, n_sites)
-    for i in 1:n_sites
-        Ω[:, i] = signal.channels[i].samples
-    end
-    Ω_flat = reshape(Ω, :)
-
-    # Compute penalty
-    penalty = penalty_function(Ω_flat, Ω₀)
-
-    return fidelity_cost + λ * penalty, ψ_ode
-end
-"""
-multiple states with complex pulse.
-penalty terms are added in real and complex amplitudes both
-"""
-
-
-function costfunction_ode_ssvqe_with_penalty(
-                                        Ψ0::Matrix{ComplexF64},
-                                        eigvals::Vector{Float64},
-                                        signal,
-                                        n_sites::Int,
-                                        drives,
-                                        eigvectors::Matrix{ComplexF64},
-                                        T::Float64,
-                                        Cost_ham;
-                                        basis = "eigenbasis",
-                                        tol_ode = 1e-8,
-                                        weights = nothing,
-                                        weighted = false,
-                                        λ::Float64 = 1.0,
-                                        Ω₀::Float64 = 2π*0.02
-)
-    n_states = size(Ψ0, 2)
-    if weights === nothing && weighted === true
-        weights = reverse(collect(1.0:-0.1:1.0-0.1*(n_states-1)))
-    end
-
-    # Evolve all initial states
-    Ψ_ode = evolve_ODE_multiple_states(
-        Ψ0, T, signal, n_sites, drives, eigvals, eigvectors;
-        basis = basis, tol_ode = tol_ode
-    )
-
-    # Compute energies for each state
-    energies = [real(ψ' * Cost_ham * ψ) for ψ in eachcol(Ψ_ode)]
-    if weighted == true
-        cost = sum(energies .* weights[1:n_states])
-    else
-        cost = sum(energies)
-    end
-
-    # Extract control amplitudes Ω from signal
-    n_timesteps = length(signal.channels[1].samples)
-    Ω_real = zeros(ComplexF64, n_timesteps, n_sites)
-    Ω_imag = zeros(ComplexF64, n_timesteps, n_sites)
-    for i in 1:n_sites
-        Ω_real[:, i] = real(signal.channels[i].samples)
-        Ω_imag[:, i] = imag(signal.channels[i].samples)
-    end
-    Ω_flat_real = reshape(Ω_real, :)
-    Ω_flat_imag = reshape(Ω_imag, :)
-    Ω_total=hcat(Ω_flat_real,Ω_flat_imag)
-    Ω_flat=reshape(Ω_total,:)
-
-    # Compute penalty
-    penalty = penalty_function(Ω_flat, Ω₀)
-
-    return cost + λ * penalty, Ψ_ode, energies
-end
-"""
-cost function that adds penalty terms for only real amplitudes
-
-"""
-function costfunction_ssvqe_with_penalty_real(
-                                        Ψ0::Matrix{ComplexF64},
-                                        eigvals::Vector{Float64},
-                                        signal,
-                                        n_sites::Int,
-                                        drives,
-                                        eigvectors::Matrix{ComplexF64},
-                                        T::Float64,
-                                        Cost_ham;
-                                        basis = "eigenbasis",
-                                        tol_ode = 1e-8,
-                                        weights = nothing,
-                                        weighted = false,
-                                        λ::Float64 = 1.0,
-                                        Ω₀::Float64 = 2π*0.02
-)
-    n_states = size(Ψ0, 2)
-    if weights === nothing && weighted === true
-        weights = reverse(collect(1.0:-0.1:1.0-0.1*(n_states-1)))
-    end
-
-    # Evolve all initial states
-    Ψ_ode = evolve_ODE_multiple_states(
-        Ψ0, T, signal, n_sites, drives, eigvals, eigvectors;
-        basis = basis, tol_ode = tol_ode
-    )
-
-    # Compute energies for each state
-    energies = [real(ψ' * Cost_ham * ψ) for ψ in eachcol(Ψ_ode)]
-    if weighted == true
-        cost = sum(energies .* weights[1:n_states])
-    else
-        cost = sum(energies)
-    end
-
-    # Extract control amplitudes Ω from signal
-    n_timesteps = length(signal.channels[1].samples)
-    Ω_real = zeros(ComplexF64, n_timesteps, n_sites)
-    for i in 1:n_sites
-        Ω_real[:, i] = real(signal.channels[i].samples)
-    end
-    Ω_flat_real = reshape(Ω_real, :)
-
-    # Compute penalty
-    penalty = penalty_function(Ω_flat_real, Ω₀)
-
-    return cost + λ * penalty, Ψ_ode, energies
-end
 
 #=
 We can use this function in the script directly for gradient with penalty with real pulse only
@@ -336,6 +169,20 @@ function bandwidth_penalty_and_gradient(Ω::Vector{Float64}, ν::Float64; cutoff
     grad = back(1.0)[1]
     return penalty, grad
 end
+"""
+    lowpass_filter(x::AbstractVector, cutoff, fs; order=4)
+
+Applies a digital low-pass Butterworth filter to a real or complex-valued signal.
+
+# Arguments
+- `x::AbstractVector`: The input signal vector, which can be real or complex-valued.
+- `cutoff::Real`: The cutoff frequency of the filter (in Hz).
+- `fs::Real`: The sampling frequency of the signal (in Hz).
+- `order::Int=4`: *(Optional)* The order of the Butterworth filter. Higher order results in a steeper roll-off. Default is 4.
+
+# Returns
+- A filtered signal vector of the same type and length as the input `x`.
+"""
 
 # Generic lowpass filter function (handles real/complex signals)
 function lowpass_filter(x::AbstractVector, cutoff, fs; order=4)
