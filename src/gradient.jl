@@ -232,7 +232,7 @@ function gradient_eachtimestep!(∂Ω_real::Matrix{Float64},
         # amp = amplitude(signals.channels[k], t)
         term = exp(im * frequency(multi_signal.channels[k], t) * t) .* drives[k]
         dH_dΩ_real .= term + term'
-        dH_dΩ_imag .= im * term - im*term' 
+        dH_dΩ_imag .= im * term - im*term' #phase factor
         # Interaction picture transformation
         device_action .= exp.((im * t) .* eigvalues)
         expD = Diagonal(device_action)
@@ -246,9 +246,11 @@ function gradient_eachtimestep!(∂Ω_real::Matrix{Float64},
         σAψ_real = -im * (σ' * AΨ_real) * τ
         AΨ_imag = dH_dΩ_imag * ψ0
         σAψ_imag = -im * (σ' * AΨ_imag) * τ
+        ∂Ω_real[time_index, k] = 2 * real(σAψ_real)
+        ∂Ω_imag[time_index, k] = 2 * real(σAψ_imag)
 
-        ∂Ω_real[time_index, k] = σAψ_real + σAψ_real'
-        ∂Ω_imag[time_index, k] = σAψ_imag + σAψ_imag'
+        # ∂Ω_real[time_index, k] = σAψ_real + σAψ_real'
+        # ∂Ω_imag[time_index, k] = σAψ_imag + σAψ_imag'
 
         dH_dΩ_imag .= zeros(ComplexF64, dim, dim)
         dH_dΩ_real .= zeros(ComplexF64, dim, dim)

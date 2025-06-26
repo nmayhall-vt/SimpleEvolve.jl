@@ -215,7 +215,42 @@ function costfunction_ode_with_penalty(ψ0::Vector{ComplexF64},
     for i in 1:n_sites
         Ω[:, i] = signal.channels[i].samples
     end
-    Ω_flat = reshape(Ω, :)
+    # Extract control amplitudes Ω from signal
+    Ω_flat_real = reshape(real.(Ω), :)
+    Ω_flat_imag = reshape(imag.(Ω), :)
+    Ω_total=hcat(Ω_flat_real,Ω_flat_imag)
+    Ω_flat=reshape(Ω_total,:)
+
+    # Compute penalty
+    penalty = SimpleEvolve.penalty_function(Ω_flat, Ω₀)
+
+    return fidelity_cost + λ * penalty, ψ_ode
+end
+function costfunction_ode_with_penalty_real(ψ0::Vector{ComplexF64},
+                         eigvals::Vector{Float64},
+                         signal, 
+                         n_sites::Int, 
+                         drives,
+                         eigvectors::Matrix{ComplexF64}, 
+                         T::Float64, 
+                         Cost_ham;
+                         basis = "eigenbasis",
+                         tol_ode=1e-8,
+                         λ::Float64=1.0,
+                         Ω₀::Float64=2π*0.02) 
+
+    # Evolve the state using ODE
+    ψ_ode = evolve_ODE(ψ0, T, signal, n_sites, drives, eigvals, eigvectors;
+                       basis=basis, tol_ode=tol_ode)
+    fidelity_cost = real(ψ_ode' * Cost_ham * ψ_ode)
+
+    # Extract control amplitudes Ω from signal
+    n_timesteps = length(signal.channels[1].samples)
+    Ω = zeros(ComplexF64, n_timesteps, n_sites)
+    for i in 1:n_sites
+        Ω[:, i] = signal.channels[i].samples
+    end
+    Ω_flat=reshape(Ω,:)
 
     # Compute penalty
     penalty = SimpleEvolve.penalty_function(Ω_flat, Ω₀)
