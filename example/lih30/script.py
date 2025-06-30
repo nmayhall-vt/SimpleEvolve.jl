@@ -1,7 +1,7 @@
 
 from fileinput import filename
 import numpy as np
-filename  ="lih30_0.1.jl.out"
+filename  ="LiH30_excited_complex.out"
 # Initialize 6 empty lists
 lists= [[] for _ in range(6)]
   
@@ -65,6 +65,6 @@ plt.xticks(T, rotation=45)
 plt.legend()
 plt.grid(True, which="both", ls="--", lw=0.5)
 plt.tight_layout()
-plt.title('Energy Error vs Pulse Duration for $\delta t$ = 0.1', fontsize=16)
-plt.savefig('lih30_0.1.png', dpi=300, bbox_inches='tight')
+# plt.title('Energy Error vs Pulse Duration for $\delta t$ = 0.1', fontsize=16)
+plt.savefig('lih30.png', dpi=300, bbox_inches='tight')
 plt.show()

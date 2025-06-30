@@ -6,14 +6,16 @@ using Optim
 using LineSearches
 using Random
 using JLD2
+using DSP
+using FFTW
 
-T = 105.0
+T = 132.0
 println("T=", T)
-Cost_ham = npzread("lih30.npy")
+Cost_ham = npzread("lih15.npy")
 # display(Cost_ham)
 n_qubits = round(Int, log2(size(Cost_ham, 1)))
 n_levels = 2
-SYSTEM = "lih30"
+SYSTEM = "lih15"
 freqs = 2π * collect(4.8 .+ (0.02 * (1:n_qubits)))
 anharmonicities = 2π * 0.3 * ones(n_qubits)
 coupling_map = Dict{QubitCoupling,Float64}()
@@ -24,7 +26,7 @@ end
 device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
 # with detuning 
-n_samples = 420
+n_samples = Int(T/2)
 carrier_freqs = freqs 
 # carrier_freqs = freqs .- 2π * 0.3
 δt = T / n_samples
@@ -81,8 +83,9 @@ end
 
 
 # we have to optimize the samples in the signal
-n_samples_grad = n_samples
-δΩ_ = Matrix{Float64}(undef, 2 * (n_samples + 1), n_qubits)
+n_samples_grad = Int(n_samples / 2)
+δΩ_ = Matrix{Float64}(undef, n_samples + 1,n_qubits)
+δΩ__ = Matrix{Float64}(undef, n_samples + 1,n_qubits)
 ∂Ω0 = Matrix{Float64}(undef, n_samples_grad + 1, n_qubits)
 τ = T / n_samples_grad
 
@@ -117,8 +120,8 @@ function gradient_ode!(Grad::Vector{Float64}, samples::Vector{Float64};
     )
 
     # === Aggregate gradients across states ===
-    grad_real = zeros(n_samples + 1, n_qubits)
-    grad_imag = zeros(n_samples + 1, n_qubits)
+    grad_real = zeros(n_samples_grad + 1, n_qubits)
+    grad_imag = zeros(n_samples_grad + 1, n_qubits)
 
     for j in 1:n_states
         if weighted
@@ -130,10 +133,29 @@ function gradient_ode!(Grad::Vector{Float64}, samples::Vector{Float64};
         end
     end
 
+    # for real parts
+    grad_real_expanded =validate_and_expand(δΩ_,grad_real,
+                                            n_samples_grad,
+                                            n_samples,
+                                            n_qubits, 
+                                            T, 
+                                            carrier_freqs,
+                                            :whittaker_shannon,
+                                            window_radius=20,
+                                            hanning_window=50)
+    # for imaginary parts
+    grad_imag_expanded =validate_and_expand(δΩ_,grad_imag,
+                                            n_samples_grad,
+                                            n_samples,
+                                            n_qubits, 
+                                            T, 
+                                            carrier_freqs,
+                                            :whittaker_shannon,
+                                            window_radius=20,
+                                            hanning_window=50)
     # === Apply Penalty if Required ===
-    grad_final = hcat(vec(grad_real), vec(grad_imag))
+    grad_final = hcat(vec(grad_real_expanded), vec(grad_imag_expanded))
     grad_final = reshape(grad_final, :)
-
     if penalty
         for i in 1:2*(n_samples+1)
             x = samples[i] / Ω₀
@@ -203,25 +225,29 @@ linesearch = LineSearches.MoreThuente()
 optimizer = Optim.LBFGS(linesearch=linesearch)
 # OPTIMIZATION OPTIONS
 options = Optim.Options(
-    show_trace=true,
-    show_every=1,
-    f_reltol=1e-12,
-    g_tol=1e-8,
-    iterations=1000,
+    show_trace = true,
+    show_every = 1,
+    f_reltol   = 1e-12,
+    g_tol      = 1e-8,
+    iterations = 1000,
 )
 
 
 
 tol_ode = 1e-4
+println("Starting optimization with tol_ode = $tol_ode")    
 optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_initial, optimizer, options)
 samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
 tol_ode = 1e-6
+println("Starting optimization with tol_ode = $tol_ode")
 optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_final, optimizer, options)
 samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
 tol_ode = 1e-8
+println("Starting optimization with tol_ode = $tol_ode")
 optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_final, optimizer, options)
 samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
 tol_ode = 1e-10
+println("Starting optimization with tol_ode = $tol_ode")
 optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_final, optimizer, options)
 samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
 
