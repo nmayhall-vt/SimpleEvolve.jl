@@ -4,8 +4,6 @@ using Plots
 using LinearAlgebra
 using Optim
 using LineSearches
-using ForwardDiff
-using ForwardDiff: GradientConfig, Chunk
 using Random
 
 Cost_ham = npzread("lih30.npy")
@@ -18,7 +16,7 @@ n_levels = 2
 SYSTEM="lih30"
 device = choose_qubits(1:n_qubits, Transmon(
     # 2π*[3.7, 4.2, 3.5, 4.0],
-    2π*[4.8, 4.82, 4.84, 4.86],                    # QUBIT RESONANCE FREQUENCIES
+    2π*[4.8, 4.82, 4.84, 4.86],                 # QUBIT RESONANCE FREQUENCIES
     2π*[0.3, 0.3, 0.3, 0.3],                    # QUBIT ANHARMONICITIES
     Dict{QubitCoupling,Float64}(                # QUBIT COUPLING CONSTANTS
         QubitCoupling(1,2) => 2π*.02,
@@ -31,8 +29,8 @@ device = choose_qubits(1:n_qubits, Transmon(
 ))
 # freqs= 2π*[3.7, 4.2, 3.5, 4.0]
 freqs = 2π*[4.8, 4.82, 4.84, 4.86]
-T=80.0
-# n_samples=200
+T=40.0
+n_samples=200
 # n_samples=250
 # n_samples=320
 n_samples=800
@@ -40,8 +38,8 @@ n_samples=800
 t_=collect(0:δt:T)
 
 # INITIAL PARAMETERS
-# samples_matrix=[sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
-samples_matrix=[2π*0.02*sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
+# samples_matrix=[2π*0.02*sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
+samples_matrix=[2π*0.000002*sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
 pulse_windows=range(0, T, length=n_samples+1)
 
 samples_initial=reshape(samples_matrix, :)
@@ -51,15 +49,10 @@ signals_ = [DigitizedSignal(samples_matrix[:,i], δt, carrier_freqs[i]) for i in
 signals = MultiChannelSignal(signals_)
 
 
-# initial state
-n_qubits = 4
-n_levels = 2  # For qubits
-
 # Ground state (Hartree-Fock)
 initial_state_ground = "1100"
 ψ_initial_g = zeros(ComplexF64, n_levels^n_qubits)
 ψ_initial_g[1 + parse(Int, initial_state_ground, base=n_levels)] = 1.0 + 0im
-
 # Excited states (single/double excitations)
 excited_configs = ["1010", "1001", "0110", "0101", "0011", "0000"]
 ψ_initial_excited = [
@@ -69,18 +62,16 @@ excited_configs = ["1010", "1001", "0110", "0101", "0011", "0000"]
 for (i, config) in enumerate(excited_configs)
     ψ_initial_excited[i][1 + parse(Int, config, base=n_levels)] = 1.0 + 0im
 end
-
 # Combine into matrix for SSVQE
 Ψ0 = hcat(ψ_initial_g, ψ_initial_excited...)
-
 ψ_initial_ =ψ_initial= copy(Ψ0)
+
 H_static = static_hamiltonian(device, n_levels)
 #eigenvalues and eigenvectors of the static Hamiltonian
 drives =a_fullspace(n_qubits, n_levels)
 eigvalues, eigvectors = eigen(Hermitian(H_static))  # Ensures real eigenvalues
 println("Eignvalues of our static Hamiltonian")
 display(eigvalues)
-
 tol_ode=1e-8
 Λ, U = eigen(Cost_ham)
 E_actual = Λ[1]+Λ[2]+Λ[3]+Λ[4]+Λ[5]+Λ[6]#+Λ[7]+Λ[8]+Λ[9]+Λ[10]+Λ[11]+Λ[12]+Λ[13]+Λ[14]+Λ[15]+ Λ[16]
@@ -157,7 +148,7 @@ function gradient_ode!(Grad, samples)
             if weighted==true
                 Grad[i, k] = sum(weights_states[j] * grad_ode[i, k, j] for j in 1:n_states)
             else
-                Grad[i, k] = grad_ode[i, k, 1]
+                Grad[i, k] = sum(grad_ode[i, k, j] for j in 1:n_states)
             end
         end
         

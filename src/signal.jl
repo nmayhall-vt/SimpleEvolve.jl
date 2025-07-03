@@ -25,6 +25,26 @@ struct MultiChannelSignal
     channels::Vector{<:AbstractSignalGenerator}
 end
 
+"""
+    amplitude(signal::DigitizedSignal, t::Real) → eltype(signal.samples)
+
+Evaluates a **digitized signal** at an arbitrary time `t` using *linear interpolation* between stored samples.
+
+───────────────────────────────────────────────────────────────────────────────
+# Arguments
+- `signal::DigitizedSignal`:  
+  A struct containing discrete‐time samples (`signal.samples`), the sampling
+  interval `δt`, and the carrier frequency .
+
+- `t::Real`:  
+  The continuous time (in seconds) at which the signal amplitude is requested.
+  Must satisfy **0 ≤ t ≤ (length(signal.samples) − 1) × δt**.
+
+# Returns
+- `y::eltype(signal.samples)`:  
+  The interpolated (or exact) amplitude of the signal at time `t`.
+"""
+
 function amplitude(signal::DigitizedSignal, t)
     
     i = Int64(floor(t / signal.δt)) + 1
@@ -45,11 +65,12 @@ function amplitude(signal::DigitizedSignal, t)
     
 end
 
-
+# returns the carrier frequency of the channel
 function frequency(signal::DigitizedSignal, t)
     return signal.carrier_freq
 end
 
+# upsampling the gradient signal using linear extrapolation
 function grad_signal_expansion(δΩ_,
                                 grad_ode,
                                 n_samples_grad,
@@ -122,6 +143,11 @@ function frequency(sw::WindowedSquareWave, t)
     return sw.frequency
 end
 
+
+
+
+
+
 """
     WindowedGaussianPulse(amplitudes, centers, widths, frequencies)
     Create a windowed Gaussian pulse with specified amplitudes, centers, widths, and frequencies.
@@ -156,6 +182,12 @@ function frequency(pulse::WindowedGaussianPulse, t)
     return pulse.frequencies[1]
 end
 
+
+
+
+
+
+
 """
     TanhEnvelope{T<:AbstractFloat}
 Signal with hyperbolic tangent envelope for smooth transitions.
@@ -174,6 +206,10 @@ end
 function value_at(sig::TanhEnvelope, t::Real) 
     return sig.amplitude * tanh((t - sig.center)/sig.sigma)
 end
+
+
+
+
 
 struct SinusoidalSignal{T<:Number} <: AbstractSignalGenerator
     amplitude::T
@@ -203,6 +239,10 @@ function analyze_sinusoidalsignal(samples, δt)
 end
 
 
+
+
+
+
 """
     SignalSum{T<:AbstractFloat}
 Algebraic sum of multiple signal components.
@@ -215,6 +255,9 @@ end
 function value_at(sig::SignalSUM, t::T) where T
     return sum(value_at(c, t) for c in sig.components)
 end
+
+
+
 
 """
     gaussian_filter(signal::DigitizedSignal, bandwidth::Real)

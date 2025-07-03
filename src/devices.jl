@@ -1,3 +1,15 @@
+"""
+    QubitCoupling(q1::Int, q2::Int)
+
+A struct of a pairwise coupling between two qubits.
+
+# Arguments
+- `q1::Int`: Index of the first qubit.
+- `q2::Int`: Index of the second qubit.
+
+# Returns
+- A `QubitCoupling` instance with the qubit indices ordered such that `qubit_1 ≤ qubit_2`.
+"""
 struct QubitCoupling
     qubit_1::Int
     qubit_2::Int
@@ -10,6 +22,27 @@ struct QubitCoupling
     end
 end
 
+
+"""
+    Transmon(freq::Vector{Float64}, anharmonicities::Vector{Float64}, 
+             coupling_map::Dict{QubitCoupling, Float64}=Dict(), 
+             n_sites::Integer=length(freq))
+
+A data structure representing a system of `n_sites` transmon qubits with specified frequencies, anharmonicities, and pairwise couplings.
+
+# Arguments
+- `freq::Vector{Float64}`: A vector specifying the bare transition frequencies (in GHz or appropriate units) of the transmon qubits. Must have length ≥ `n_sites`.
+- `anharmonicities::Vector{Float64}`: A vector specifying the anharmonicity (typically negative) for each transmon qubit. Must have length ≥ `n_sites`.
+- `coupling_map::Dict{QubitCoupling, Float64}` *(optional)*: A dictionary mapping qubit pairs (as `QubitCoupling`) to their coupling strength (in GHz or appropriate units). Only couplings between valid qubit indices (`1:n_sites`) are retained.
+- `n_sites::Integer` *(optional)*: Number of qubits to model. Defaults to the length of `freq`.
+
+# Returns
+- A `Transmon` instance containing:
+  - `n_sites`: Number of active transmon qubits.
+  - `freq`: Vector of truncated frequencies for active sites.
+  - `anharmonicities`: Vector of truncated anharmonicities for active sites.
+  - `coupling_map`: Dictionary of valid pairwise couplings.
+"""
 
 struct Transmon 
     n_sites::Int
@@ -37,6 +70,21 @@ struct Transmon
         new(n_sites, freq, anharmonicities, valid_couplings)
     end
 end
+
+"""
+    choose_qubits(slice::AbstractVector{<:Integer}, device::Transmon) -> Transmon
+
+Constructs a new `Transmon` subsystem by selecting a subset of qubits from an existing device.
+
+# Arguments
+- `slice::AbstractVector{<:Integer}`: A vector of qubit indices (1-based) specifying the subset of qubits to include in the new device. Must be within `1:device.n_sites`.
+- `device::Transmon`: The original `Transmon` device from which a sub-device will be extracted.
+
+# Returns
+- A new `Transmon` object consisting only of the selected qubits, with:
+  - Frequencies and anharmonicities truncated to the selected indices.
+  - A filtered and reindexed `coupling_map` containing only the valid interactions between qubits in `slice`.
+"""
 
 function choose_qubits(slice::AbstractVector{<:Integer}, device::Transmon)
     # Validate slice indices

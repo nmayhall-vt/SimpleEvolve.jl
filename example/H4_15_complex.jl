@@ -22,21 +22,26 @@ for p in 1:n_qubits
 end
 device = Transmon(freqs, anharmonicities, coupling_map, n_qubits)
 
-
+# with detuning 
 T=30.0
 n_samples = 200
-δt = T/n_samples
-t_=collect(0:δt:T)
+carrier_freqs = freqs.-2π*0.1
+#without detuning
+# T=40.0
+# n_samples = 200
+# carrier_freqs = freqs
+# δt = T/n_samples
+# t_=collect(0:δt:T)
 
 
 # INITIAL PARAMETERS
-samples_matrix = [2π*0.02* sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
+samples_matrix = [2π*0.00002* sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
 # display(samples_matrix)
 samples_matrix = [samples_matrix[:,i] .+ im*samples_matrix[:,i] for i in 1:n_qubits] 
 samples_matrix = hcat(samples_matrix...)
 pulse_windows=range(0, T, length=n_samples+1)
 samples_initial = [real(samples_matrix[:]); imag(samples_matrix[:])]
-carrier_freqs = freqs.-2π*0.1 
+# carrier_freqs=freqs # on resonance running as complex pulse can optimize without detuning
 signals_ = [DigitizedSignal([samples_matrix[:,i]], δt, carrier_freqs[i]) for i in 1:n_qubits]
 signals = MultiChannelSignal(signals_)
 
@@ -241,4 +246,4 @@ savefig("real_part_final_signals_$(n_qubits)_$(n_levels)_$(SYSTEM)_$(n_samples)_
 )
 plot(Ω_plots, Ω_plots_final, layout=(1,2))
 
-savefig("imag_part_final_signals_$(n_qubits)_$(n_levels)_$(SYSTEM)_$(n_samples)_$(T).pdf")
+savefig("imag_part_final_signals_$(n_qubits)_$(n_levels)_$(SYSTEM)_$(n_samples)_$(T)_on_resonance.pdf")

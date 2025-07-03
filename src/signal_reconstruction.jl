@@ -92,7 +92,7 @@ function reconstruct_gradient_ws(signal::DigitizedSignal, output_samples::Int)
     # Anti-aliasing filter parameters
     original_nyquist = 1/(2δt_original)
     new_fs = 1/new_δt
-    cutoff = original_nyquist  # Critical cutoff frequency
+    cutoff = original_nyquist-0.001  # Critical cutoff frequency
     
     # Apply FIR lowpass filter
     filtered = lowpass(upsampled, cutoff, new_fs)

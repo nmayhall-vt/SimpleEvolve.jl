@@ -37,8 +37,8 @@ n_samples=200
 t_=collect(0:δt:T)
 
 # INITIAL PARAMETERS
-# samples_matrix=[sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
-samples_matrix=[2π*0.02*sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
+# samples_matrix=[2π*0.02*sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
+samples_matrix=[2π*0.00002*sin(2π*(t/n_samples)) for t in 0:n_samples,i in 1:n_qubits] 
 pulse_windows=range(0, T, length=n_samples+1)
 
 samples_initial=reshape(samples_matrix, :)
@@ -143,7 +143,7 @@ function gradient_ode!(Grad, samples)
             if weighted==true
                 Grad[i, k] = sum(weights_states[j] * grad_ode[i, k, j] for j in 1:n_states)
             else
-                Grad[i, k] = grad_ode[i, k, 1]
+                Grad[i, k] = sum(grad_ode[i, k, j] for j in 1:n_states)
             end
         end
         
