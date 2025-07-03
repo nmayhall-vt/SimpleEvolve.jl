@@ -264,7 +264,7 @@ using Test
     options = Optim.Options(
         show_trace=true,
         show_every=1,
-        f_reltol=1e-10,
+        f_reltol=1e-15,
         g_tol=1e-8,
         iterations=1000,
     )
