@@ -277,10 +277,10 @@ using Test
     tol_ode = 1e-6
     optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_final, optimizer, options)
     samples_final = Optim.minimizer(optimization)      # FINAL PARAMETERS
-    tol_ode = 1e-8
+    tol_ode = 1e-9
     optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_final, optimizer, options)
     samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
-    tol_ode = 1e-10
+    tol_ode = 1e-12
     optimization = Optim.optimize(costfunction_o, gradient_ode!, samples_final, optimizer, options)
     samples_final = Optim.minimizer(optimization)       # FINAL PARAMETERS
     f_converged = costfunction_o(samples_final)
@@ -347,7 +347,7 @@ using Test
     energies = A.values
     @testset "Energy comparison to target spectrum" begin
         for i in 1:4
-            @test isapprox(energies[i], Λ[i]; atol=0.00001)
+            @test isapprox(energies[i], Λ[i]; atol=0.0001)
         end
     end
 
