@@ -106,15 +106,55 @@ function projector(n::Integer, m::Integer, m0::Integer)
     return Π
 end
 
+
+"""
+    transform!(x::Vector{T}, A::AbstractMatrix{<:Number}, _x::Vector{T}) where T <: Number
+
+In-place matrix-vector multiplication using a temporary workspace.
+
+# Arguments
+- `x::Vector{T}`: Input vector to be transformed. Overwritten with the result.
+- `A::AbstractMatrix{<:Number}`: Matrix applied to the vector.
+- `_x::Vector{T}`: Temporary workspace (must be same length as `x`).
+
+# Returns
+- The vector `x` is updated in-place as `x := A * x`, with intermediate computation stored in `_x`.
+"""
+
 function transform!(
     x::Vector{T}, A::AbstractMatrix{<:Number}, _x::Vector{T}
 ) where T <: Number
     x .= mul!(_x, A, x)
 end
+
+"""
+    transform!(x::AbstractVector{T}, A::AbstractMatrix{<:Number}, _x::AbstractVector{T}) where T <: Number
+
+Generic form of `transform!` for any subtype of `AbstractVector`.
+
+# Description
+Identical functionality to the vector-specific version but supports more general vector types (e.g., `SVector`, `SubArray`, etc.). 
+"""
+
 function transform!(x::AbstractVector{T}, A::AbstractMatrix{<:Number}, _x::AbstractVector{T}) where T <: Number
     x .= mul!(_x, A, x)
 end
 
+"""
+    kron_concat(ops::AbstractVector{Matrix{T}}, O_::AbstractVector{Matrix{T}}) where T <: Number -> Matrix{T}
+
+Computes the sequential Kronecker product of a list of matrices and stores intermediate results in-place.
+
+# Arguments
+- `ops::AbstractVector{Matrix{T}}`: A vector of matrices (e.g., quantum operators on individual subsystems) to be Kronecker-tensored together.
+- `O_::AbstractVector{Matrix{T}}`: Preallocated output buffer to store intermediate Kronecker products. Must have same length as `ops`.
+
+# Returns
+- `O_[end]::Matrix{T}`: The final matrix resulting from `ops[1] ⊗ ops[2] ⊗ ... ⊗ ops[end]`.
+
+# Description
+This function computes chained Kronecker products efficiently with in-place memory reuse using `kron!`.
+"""
 function kron_concat(
     ops::AbstractVector{Matrix{T}},
     O_::AbstractVector{Matrix{T}},
